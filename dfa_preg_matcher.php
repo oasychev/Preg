@@ -32,6 +32,8 @@ class finite_automate_state {//finite automate state
 
 class dfa_preg_matcher extends preg_matcher {
 
+    
+
 
     var $connection;//array, $connection[0] for main regex, $connection[<assert number>] for asserts
     var $roots;//array,[0] main root, [<assert number>] assert's root
@@ -43,6 +45,26 @@ class dfa_preg_matcher extends preg_matcher {
     function name() {
         return 'dfa_preg_matcher';
     }
+
+
+    /**
+    *returns true for supported capabilities
+    @param capability the capability in question
+    @return bool is capanility supported
+    */
+    function is_supporting($capability) {
+        switch($capability) {
+        case preg_matcher::PARTIAL_MATCHING :
+        case preg_matcher::NEXT_CHARACTER :
+            return true;
+            break;
+        case preg_matcher::CHARACTERS_LEFT :
+            return false;//We hope it'll be true some day
+            break;
+        }
+        return false;
+    }
+    
     /**
     *Function validate regex, before built tree, it need for validation
     *@param $regex - regular expirience for validation
@@ -737,27 +759,27 @@ class dfa_preg_matcher extends preg_matcher {
             $node->chars = 'METASYBOLD_';//METASYMBOL_DOT is service word, METASYBOLD_ is equivalent character class.
         }  
     }
+
     /**
     *get regex and build finite automates
     @param regex - regular expirience for which will be build finite automate
+    @param modifiers - modifiers of regular expression
     */
-    function __construct($regex) {
-        if (isset($regex)) {
-            //getting tree
-            $this->build_tree($regex);
-            //building finite automates
-            dfa_preg_matcher::convert_tree($this->roots[0]);
-            $this->append_end(0);
-            $this->buildfa(0);
-            foreach ($this->roots as $key => $value) {
-                if ($key) {
-                    $this->append_end($key);
-                    $this->buildfa($key);
-                }
+    function __construct($regex, $modifiers = null) {
+        parent::__construct($regex, $modifiers);
+        $this->roots[0] = $this->ast_root;
+        //building finite automates
+        dfa_preg_matcher::convert_tree($this->roots[0]);
+        $this->append_end(0);
+        $this->buildfa(0);
+        foreach ($this->roots as $key => $value) {
+            if ($key) {
+                $this->append_end($key);
+                $this->buildfa($key);
             }
-            $this->built = true;
-            return;
         }
+        $this->built = true;
+        return;
     }
     /**
     *function get string and compare it with regex
