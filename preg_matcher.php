@@ -59,6 +59,19 @@ class preg_matcher {
     }
 
     /**
+    * creates an empty object, used mainly to query engine capabilities
+    */
+    public function __construct() {
+        $this->errors = array('Empty matcher');
+        $this->full = false;
+        $this->index = -1;
+        $this->next = '';
+        $this->left = -1;
+        $this->result_cache = array();
+        $this->regex = null;
+    }
+
+    /**
     *parse regex and do all necessary preprocessing
     @param regex - regular expression for which will be build finite automate
     @param modifiers - modifiers of regular expression
@@ -76,7 +89,7 @@ class preg_matcher {
             $supportedmodifiers = $this->get_supported_modifiers();
             for ($i=0; $i < strlen($modifiers); $i++) {
                 if (strpos($supportedmodifiers,$modifiers[$i]) === false) {
-                    $errors[] = 'Error: modifier '.$modifiers[$i].' isn\'t supported by engine '.$this->name.'.';
+                    $this->errors[] = 'Error: modifier '.$modifiers[i].' isn\'t supported by engine '.$this->name.'.';
                 }
             }
         }
@@ -92,6 +105,7 @@ class preg_matcher {
 
         //check regular expression for validity
         $this->accept_tree($this->ast_root);
+        }
     }
 
     /**
@@ -131,6 +145,9 @@ class preg_matcher {
         } else {
             return false;
         }
+
+
+
     }
 
     /**
@@ -205,6 +222,7 @@ class preg_matcher {
     public function next_char() {
         if ($this->is_supporting(preg_matcher::NEXT_CHARACTER)) {
             return $this->next;
+
         }
         throw new qtype_preg_exception('Error:'.$this->name().' class doesn\'t supports hinting');
     }
@@ -214,7 +232,7 @@ class preg_matcher {
     */
     public function characters_left() {
         if ($this->is_supporting(preg_matcher::CHARACTERS_LEFT)) {
-            return $this->index;
+            return $this->left;
         }
         throw new qtype_preg_exception('Error:'.$this->name().' class doesn\'t supports counting of the remaining characters');
     }
@@ -240,6 +258,7 @@ class preg_matcher {
     @param $regex - regular expirience for building tree
     */
     /*protected*/public function build_tree($regex) {
+
         StringStreamController::createRef('regex', $regex);
         $pseudofile = fopen('string://regex', 'r');
         $lexer = new Yylex($pseudofile);
@@ -248,6 +267,7 @@ class preg_matcher {
         while ($token = $lexer->nextToken()) {
             $prev = $curr;
             $curr = $token->type;
+
             if (preg_parser_yyParser::is_conc($prev, $curr)) {
                 $parser->doParse(preg_parser_yyParser::CONC, 0);
                 $parser->doParse($token->type, $token->value);
