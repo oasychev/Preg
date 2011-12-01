@@ -79,7 +79,7 @@ class dfa_preg_matcher extends preg_matcher {
         return false;
     }
     
-    function is_node_acceptable($pregnode) {
+    protected function is_preg_node_acceptable($pregnode) {
         switch ($pregnode->name()) {
         case 'leaf_charset':
         case 'leaf_meta':
@@ -87,7 +87,7 @@ class dfa_preg_matcher extends preg_matcher {
             return true;
             break;
         }
-        return false;
+        return get_string($pregnode->name(), 'qtype_preg');
     }
 
     /**
@@ -353,11 +353,22 @@ class dfa_preg_matcher extends preg_matcher {
             $i++;
         }
         $found = false;
+		$counter = 0;
         while (!$found) {//while not found way to end state
             foreach ($front as $i => $curr) {//for each start char and it's subfront
+				if ($counter > 10000) {
+					//TODO set wave error flag!
+					$res = new stdClass;
+					$res->nextkey = 1;
+					$res->left = 0;
+					return $res;
+					return new stdClass;
+				} else {
+					$counter++;
+				}
                 foreach ($curr->currentstep as $step) {//for all state if current subfront
                     foreach ($this->finiteautomates[$assertnum][$step]->passages as $passkey => $passage) {//for all passage in this state
-                        if ($passage != $step) {//if passage not to self
+						if ($passage != $step) {//if passage not to self
 							$endafterassert = false;
 							if ($this->connection[$assertnum][$passkey]->pregnode->type == preg_node::TYPE_LEAF_ASSERT) {
 								foreach ($this->finiteautomates[$assertnum][$passage]->passages as $secondpass) {
@@ -576,19 +587,19 @@ class dfa_preg_matcher extends preg_matcher {
     function __construct($regex = null, $modifiers = null) {
         global $CFG;
         $this->picnum=0;
-        if (isset($CFG->dotpath)) {
-            $this->graphvizpath = $CFG->dotpath;//in few unit tests dfa_preg_matcher objects create without regex,
+        if (isset($CFG->qtype_preg_graphvizpath)) {
+            $this->graphvizpath = $CFG->qtype_preg_graphvizpath;//in few unit tests dfa_preg_matcher objects create without regex,
                                                   //but dfa will be build later and need for drawing dfa may be
         } else {
             $this->graphvizpath = 1;
         }
 		if (isset($CFG->statecount)) {
-			$this->maxstatecount = $CFG->statecount;
+			$this->maxstatecount = $CFG->qtype_preg_dfastatecount;
 		} else {
 			$this->maxstatecount = 1;
 		}
 		if (isset($CFG->passcount)) {
-			$this->maxpasscount = $CFG->passcount;
+			$this->maxpasscount = $CFG->qtype_preg_dfapasscount;
 		} else {
 			$this->maxpasscount = 1;
 		}

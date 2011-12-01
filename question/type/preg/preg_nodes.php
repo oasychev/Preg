@@ -31,7 +31,7 @@ class preg_lexem {
 * Class for plain subpattern lexems
 */
 class preg_lexem_subpatt extends preg_lexem {
-	//Number of subpattern
+    //Number of subpattern
     public $number;
 
     public function __construct($subtype, $indfirst, $indlast, $number) {
@@ -129,17 +129,6 @@ abstract class preg_leaf extends preg_node {
     public function consumes() {
         return 1;
     }
-    
-    /*
-    * Returns a clone of the leaf including merged assertions
-    */
-    public function &get_clone() {
-        $res = clone $this;
-        $res->mergedassertions = array();
-        foreach ($this->mergedassertions as $assert)
-            $res->mergedassertions[] = $assert->get_clone();
-        return $res;
-    }
 
     /*
     * Returns true if character(s) starting from $str[$pos] matches with leaf, false otherwise
@@ -187,6 +176,15 @@ abstract class preg_leaf extends preg_node {
     * @return human readable form of leaf
     */
     abstract public function tohr();
+
+    /**
+    * When clonning a leaf we want a copy of the merged assertions
+    */
+    public function __clone() {
+        foreach ($this->mergedassertions as $i => $mergedassertion) {
+            $this->mergedassertions[$i] = clone $mergedassertion;
+        }
+    }
 }
 
 /**
@@ -318,8 +316,12 @@ class preg_leaf_meta extends preg_leaf {
         return $result;
     }
     protected function match_inner($str, $pos, &$length, $cs) {
+        if ($this->subtype == preg_leaf_meta::SUBTYPE_EMPTY) {
+            $length = 0;
+            return true;
+        }
         $textlib = textlib_get_instance();
-        if ($pos >= $textlib->strlen($str) && $this->subtype != preg_leaf_meta::SUBTYPE_EMPTY) {
+        if ($pos>=$textlib->strlen($str)) {
             $length = 0;
             return false;
         }
@@ -441,9 +443,9 @@ class preg_leaf_assert extends preg_leaf {
                 $start = $pos==0 && ($str[0]=='_' || ctype_alnum($str[0]));
                 $end = $pos == $textlib->strlen($str) && ($str[$pos-1]=='_' || ctype_alnum($str[$pos-1]));
                 if ($pos>0 && $pos < $textlib->strlen($str)) {
-                    $wW = ($str[$pos-1]=='_' || ctype_alnum($str[$pos-1])) && !($str[$pos]=='_' || ctype_alnum($str[$pos]));
-                    $Ww = !($str[$pos-1]=='_' || ctype_alnum($str[$pos-1])) && ($str[$pos]=='_' || ctype_alnum($str[$pos]));
-                } else {
+					$wW = ($str[$pos-1]=='_' || ctype_alnum($str[$pos-1])) && !($str[$pos]=='_' || ctype_alnum($str[$pos]));
+					$Ww = !($str[$pos-1]=='_' || ctype_alnum($str[$pos-1])) && ($str[$pos]=='_' || ctype_alnum($str[$pos]));
+				} else {
 					$wW = $Ww = false;
 				}
                 if ($start||$end||$wW||$Ww) {
@@ -627,8 +629,8 @@ class preg_leaf_combo extends preg_leaf {
         } else {
             $result = new preg_leaf_combo;
             $result->subtype = preg_leaf_combo::SUBTYPE_CROSS;
-            $result->childs[0] = $leaf0->get_clone();
-            $result->childs[1] = $leaf1->get_clone();
+            $result->childs[0] = clone $leaf0;
+            $result->childs[1] = clone $leaf1;
         }
         return $result;
     }
@@ -695,28 +697,41 @@ class preg_leaf_backref extends preg_leaf {
         }
         $start = $this->matcher->first_correct_character_index($this->number);
         $end = $this->matcher->last_correct_character_index($this->number);
+        $subpattlen = $end - $start + 1;
         $matchlen = 0;
         $result = true;
         // check char by char
-        for ($i = $start; $result && $i <= $end && $i + $pos < $len; $i++) {
-            $result = $result && ($strcopy[$i] == $strcopy[$i + $pos]);
+        for ($i = $start; $result && $i <= $end && $matchlen + $pos < $len; $i++) {
+            $result = $result && ($strcopy[$i] === $strcopy[$pos + $matchlen]);
             if ($result) {
                 $matchlen++;
             }
         }
         // if the string has not enough characters
-        if ($end + $pos >= $len) {
+        if ($pos + $subpattlen - 1 >= $len) {
             $result = false;
         }
-        $length = $matchlen;        
+        $length = $matchlen;
         return $result;
     }
+
     public function name() {
         return 'leaf_backref';
     }
+
     public function next_character($str, $pos, $length = 0) {
-        die ('TODO: implements abstract function character for preg_leaf_backref class before use it!');
+        // TODO: check for assertions in case of $length == 0
+        if (!$this->matcher->is_subpattern_captured($this->number)) {
+            return '';
+        }
+        $start = $this->matcher->first_correct_character_index($this->number);
+        $textlib = textlib_get_instance();
+        if ($start + $length >= $textlib->strlen($str)) {
+            return '';
+        }
+        return $str[$start + $length];
     }
+
     public function tohr() {
         return 'backref #'.$this->number;
     }
@@ -773,6 +788,15 @@ abstract class preg_operator extends preg_node {
 
     //An array of operands
     public $operands = array();
+
+    /**
+    * When clonning an operator we want a copy of the whole subtree, not the references to the operands
+    */
+    public function __clone() {
+        foreach ($this->operands as $i => $operand) {
+            $this->operands[$i] = clone $operand;
+        }
+    }
 
 }
 

@@ -13,6 +13,15 @@ class preg_error {
         return substr($regex, 0, $indfirst) . '<b>' . substr($regex, $indfirst, $indlast-$indfirst+1) . '</b>' . substr($regex, $indlast + 1);
     }
 
+     public function __construct($errormsg, $regex='', $index_first=-2, $index_last=-2) {
+        $this->index_first = $index_first;
+        $this->index_last = $index_last;
+        if ($index_first != -2) {
+            $this->errormsg = $this->highlight_regex($regex, $index_first, $index_last). '<br/>' . $errormsg;
+        } else {
+            $this->errormsg = $errormsg;
+        }
+     }
 }
 
 // A syntax error occured while parsing a regex
@@ -29,12 +38,22 @@ class preg_parsing_error extends preg_error {
 // There's an unacceptable node in a regex
 class preg_accepting_error extends preg_error {
 
-    public function __construct($regex, $matcher, $nodename, $indexes) {
+    /*
+     * Returns a string with first character converted to upper case.
+     */
+    public function uppercase_first_letter($str) {
+        $textlib = textlib_get_instance();
+        $firstchar = $textlib->strtoupper($textlib->substr($str, 0, 1));
+        $rest = $textlib->substr($str, 1, $textlib->strlen($str));
+        return $firstchar.$rest;
+    }
+
+    public function __construct($regex, $matchername, $nodename, $indexes) {
         $a = new stdClass;
-        $a->nodename = $nodename;
+        $a->nodename = $this->uppercase_first_letter($nodename);
         $a->indfirst = $indexes['start'];
         $a->indlast = $indexes['end'];
-        $a->engine = get_string($matcher->name(), 'qtype_preg');
+        $a->engine = get_string($matchername, 'qtype_preg');
         $this->index_first = $a->indfirst;
         $this->index_last = $a->indlast;
         $this->errormsg = $this->highlight_regex($regex, $this->index_first, $this->index_last) . '<br/>' . get_string('unsupported','qtype_preg',$a);
@@ -45,10 +64,10 @@ class preg_accepting_error extends preg_error {
 // There's an unsupported modifier in a regex
 class preg_modifier_error extends preg_error {
 
-    public function __construct($matcher, $modifier) {
+    public function __construct($matchername, $modifier) {
         $a = new stdClass;
         $a->modifier = $modifier;
-        $a->classname = $matcher->name();
+        $a->classname = $matchername;
         $this->errormsg = get_string('unsupportedmodifier','qtype_preg',$a);
     }
 

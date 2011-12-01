@@ -1,4 +1,12 @@
 <?php
+/**
+ * Defines NFA node classes
+ *
+ * @copyright &copy; 2011  Valeriy Streltsov
+ * @author Valeriy Streltsov, Volgograd State Technical University
+ * @license http://www.gnu.org/copyleft/gpl.html GNU Public License
+ * @package questions
+ */
 
 require_once($CFG->dirroot . '/question/type/preg/preg_nodes.php');
 
@@ -7,42 +15,27 @@ require_once($CFG->dirroot . '/question/type/preg/preg_nodes.php');
  */
 class nfa_transition
 {
-    public $loops = false;       // true if this transition makes a loop: for example, (...)* contains an epsilon-transition that makes a loop
-
-    public $pregleaf;            // transition data, a reference to an object of preg_leaf
-
-    public $state;               // the state which this transition leads to, a reference to an object of nfa_state
-
-    public $replaceable;         // eps-transitions are replaced by next non-eps transitions for merging simple assertions
-
+    public $loops = false;                  // true if this transition makes a loop: for example, (...)* contains an epsilon-transition that makes a loop
+    public $pregleaf;                       // transition data, a reference to an object of preg_leaf
+    public $state;                          // the state which this transition leads to, a reference to an object of nfa_state
+    public $replaceable;                    // eps-transitions are replaced by next non-eps transitions for merging simple assertions
     public $subpatt_start = array();        // an array of subpatterns which start in this transition
-
     public $subpatt_end = array();          // an array of subpatterns which end in this transition
+    //public $belongs_to_subpatt = array();   // an array of subpatterns which this transition belongs to
 
-    public $belongs_to_subpatt = array();   // an array of subpatterns which this transition belongs to
-
-    public function __construct(&$_pregleaf, &$_state, $_loops, $_replaceable = false, $_subpatt_start = array(), $_subpatt_end = array(), $_belongs_to_subpatt = array()) {
-        $this->pregleaf = $_pregleaf->get_clone();    // the leaf should be unique
+    public function __construct(&$_pregleaf, &$_state, $_loops, $_replaceable = false) {
+        $this->pregleaf = clone $_pregleaf;    // the leaf should be unique
         $this->state = $_state;
         $this->loops = $_loops;
         $this->replaceable = $_replaceable;
-        foreach ($_subpatt_start as $key=>$subpatt) {
-            $this->subpatt_start[$key] = $subpatt;
-        }
-        foreach ($_subpatt_end as $key=>$subpatt) {
-            $this->subpatt_end[$key] = $subpatt;
-        }
-        foreach ($_belongs_to_subpatt as $key=>$subpatt) {
-            $this->belongs_to_subpatt[$key] = $subpatt;
-        }
     }
 
-    public function &get_clone() {
-        $res = new nfa_transition($this->pregleaf, $this->state, $this->loops, $this->replaceable, $this->subpatt_start, $this->subpatt_end, $this->belongs_to_subpatt);
-        $res->state =& $this->state;
-        return $res;
+    /**
+    * When clonning a transition we want a copy of its pregleaf
+    */
+    public function __clone() {
+        $this->pregleaf = clone $this->pregleaf;
     }
-
 }
 
 /**
@@ -52,41 +45,30 @@ class nfa_state
 {
 
     public $startsinfinitequant = false;    // true if this state starts an infinite quantifier either * or + or {m,}
-
     public $next = array();                 // an array of objects of nfa_transition
-
     //public $previous = array();
-
     public $id;                             // id of the state, debug variable
 
     /**
      * appends a next possible state
      * @param transition - a reference to the transition to be appended
-     * @param assertion - an assertion (preg_leaf_assert) to be merged to this transition
      * $return - true if transition was appended
      */
-    public function append_transition(&$transition, $assertion = null) {
+    public function append_transition(&$transition) {
         // avoid self-loops by eps-transitions
         if ($transition->state === $this && $transition->pregleaf->subtype == preg_leaf_meta::SUBTYPE_EMPTY) {
             return false;
         }
 
         $exists = false;
-        $transition_copy = $transition->get_clone();
-        if ($assertion != null) {
-            $transition_copy->pregleaf->mergedassertions[] = $assertion->get_clone();
-        }
         // not unique transitions are not appended
         foreach($this->next as $curnext) {
-            if ($curnext->pregleaf == $transition_copy->pregleaf && $curnext->state === $transition_copy->state && $curnext->pregleaf->mergedassertions === $transition_copy->pregleaf->mergedassertions) {
+            if ($curnext->pregleaf == $transition->pregleaf && $curnext->state === $transition->state && $curnext->pregleaf->mergedassertions === $transition->pregleaf->mergedassertions) {
                 $exists = true;
             }
         }
         if (!$exists) {
-            array_push($this->next, $transition_copy);
-            /*$transition_copy = $transition_copy->get_clone();
-            $transition_copy->state =& $this;
-            array_push($transition->state->previous, $transition_copy);*/
+            array_push($this->next, clone $transition);
             if ($transition->loops) {
                 $this->startsinfinitequant = true;
             }
@@ -153,24 +135,17 @@ class nfa_state
  */
 class nfa {
 
+    private $graphvizpath;       // path to dot.exe of graphviz
     public $startstate;          // a reference to the start nfa_state of the automaton
-
     public $endstate;            // a reference to the end nfa_state of the automaton
-
     public $states = array();    // an array containing references to states of the automaton
 
-    var $graphvizpath = 'C:\Program Files (x86)\Graphviz2.26.3\bin';    // path to dot.exe of graphviz
-
-    /**
-     * clears $subpatt_start, $subpatt_end and $belongs_to_subpatt in every transition of the automaton
-     */
-    public function remove_subpatterns() {
-        foreach ($this->states as $curstate) {
-            foreach ($curstate->next as $curnext) {
-                $curnext->subpatt_start = array();
-                $curnext->subpatt_end = array();
-                $curnext->belongs_to_subpatt = array();
-            }
+    public function __construct() {
+        global $CFG;
+        if (isset($CFG->qtype_preg_graphvizpath)) {
+            $this->graphvizpath = $CFG->qtype_preg_graphvizpath;
+        } else {
+            $this->graphvizpath = '';
         }
     }
 
@@ -358,6 +333,10 @@ class nfa {
     * @param jpgfilename - name of the resulting jpg file
     */
     public function draw_nfa($dotfilename, $jpgfilename) {
+        if ($this->graphvizpath === '') {
+            echo 'dot.exe path not specified<br/>';
+            return;
+        }
         $dotfile = fopen($dotfilename, 'w');
         // numerate all states
         $tmp = 0;
@@ -381,8 +360,19 @@ class nfa {
                     $index2 = $curtransition->state->id;
                     $lab = "";
                     $this->tohr_recursive($curtransition->pregleaf, $lab);
-                    if ($curtransition->loops)
-                        $lab = $lab."*";
+                    // information about subpatterns
+                    if (count($curtransition->subpatt_start) > 0) {
+                        $lab = $lab."starts";
+                        foreach ($curtransition->subpatt_start as $key=>$val) {
+                            $lab = $lab."$key,";
+                        }
+                    }
+                    if (count($curtransition->subpatt_end) > 0) {
+                        $lab = $lab."ends";
+                        foreach ($curtransition->subpatt_end as $key=>$val) {
+                            $lab = $lab."$key,";
+                        }
+                    }
                     fprintf($dotfile, "%s\n", "$index1->$index2"."[label=\"$lab\"];");
                 }
         }
@@ -404,13 +394,12 @@ abstract class nfa_preg_node {
     public $pregnode;    // a reference to the corresponding preg_node
 
     /**
-    * returns true if engine support the node, false otherwise
-    * when returning false should also set rejectmsg field
+    * returns true if engine support the node, rejection string otherwise
     */
     public function accept() {
         return true; // accepting anything by default
     }
-    
+
     /**
      * increases size of an nfa
      * @param matcher - a reference to the matcher
@@ -423,7 +412,7 @@ abstract class nfa_preg_node {
     public function inc_fa_size(&$matcher, $ds, $dt, &$statecount, &$transitioncount) {
         $statecount += $ds;
         $transitioncount += $dt;
-        return !($statecount > $matcher->statelimit || $transitioncount > $matcher->transitionlimit);
+        return !($statecount > $matcher->get_state_limit() || $transitioncount > $matcher->get_transition_limit());
     }
 
     /**
@@ -443,11 +432,19 @@ abstract class nfa_preg_node {
 
 }
 
-
 /**
 * class for nfa transitions
 */
 class nfa_preg_leaf extends nfa_preg_node {
+
+    public function accept() {
+        if ($this->pregnode->type == preg_node::TYPE_LEAF_ASSERT && $this->pregnode->subtype == preg_leaf_assert::SUBTYPE_ESC_G) {
+            $leafdesc = get_string($this->pregnode->name(), 'qtype_preg');
+            return $leafdesc . ' \G';
+        }
+        return true;
+
+    }
 
     public function create_automaton(&$matcher, &$stackofautomatons, &$statecount, &$transitioncount) {
         // create start and end states of the resulting automaton
@@ -573,6 +570,13 @@ class nfa_preg_node_alt extends nfa_preg_operator {
 */
 class nfa_preg_node_infinite_quant extends nfa_preg_operator {
 
+    public function accept() {
+        if (!$this->pregnode->greed) {
+            return get_string('ungreedyquant', 'qtype_preg');
+        }
+        return true;
+    }
+
     /**
      * creates an automaton for * or {0,} quantifier
      */
@@ -586,7 +590,9 @@ class nfa_preg_node_infinite_quant extends nfa_preg_operator {
             return $this;
         }
         foreach ($body->startstate->next as $curnext) {
-            $body->endstate->append_transition(new nfa_transition($curnext->pregleaf, $curnext->state, true));
+            $clone = clone $curnext;
+            $clone->loops = true;
+            $body->endstate->append_transition($clone);
         }
         $epsleaf = new preg_leaf_meta;
         $epsleaf->subtype = preg_leaf_meta::SUBTYPE_EMPTY;
@@ -612,14 +618,15 @@ class nfa_preg_node_infinite_quant extends nfa_preg_operator {
         for ($i = 0; $i < $leftborder + 1; $i++) {
             $cur = array_pop($stackofautomatons);
             if ($i > 0) {
-                $cur->remove_subpatterns();
                 // the last block is repeated
                 if ($i == $leftborder) {
                     if (!$this->inc_fa_size($matcher, 0, count($cur->startstate->next) + 1, $statecount, $transitioncount)) {
                         return $this;
                     }
                     foreach ($cur->startstate->next as $curnext) {
-                        $cur->endstate->append_transition(new nfa_transition($curnext->pregleaf, $curnext->state, true));
+                        $clone = clone $curnext;
+                        $clone->loops = true;
+                        $cur->endstate->append_transition($clone);
                     }
                     $epsleaf = new preg_leaf_meta;
                     $epsleaf->subtype = preg_leaf_meta::SUBTYPE_EMPTY;
@@ -703,8 +710,9 @@ class nfa_preg_node_finite_quant extends nfa_preg_operator {
                 $cur->startstate->append_transition(new nfa_transition($epsleaf, $endstate, false, true));
             }
             if ($i > 0) {
-                $cur->remove_subpatterns();
-                $endstate->update_state_references($cur->startstate, $res->endstate);
+                if ($endstate !== null) {
+                    $endstate->update_state_references($cur->startstate, $res->endstate);
+                }
                 $cur->update_state_references($cur->startstate, $res->endstate);
                 $res->endstate->merge($cur->startstate);
                 $cur->remove_state($cur->startstate);
@@ -748,7 +756,7 @@ class nfa_preg_node_subpatt extends nfa_preg_operator {
         }
         foreach ($body->states as $state) {
             foreach ($state->next as $next) {
-                $next->belongs_to_subpatt[$this->pregnode->number] = true;
+                //$next->belongs_to_subpatt[$this->pregnode->number] = true;
                 if ($next->state === $body->endstate) {
                     $next->subpatt_end[$this->pregnode->number] = true;
                 }
