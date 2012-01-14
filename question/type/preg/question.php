@@ -307,7 +307,6 @@ class qtype_preg_question extends question_graded_automatically
                 $for_regexp = '^(?:'.$for_regexp.')$';
             }
 
-            $engineclass = 'qtype_preg_'.$engine;
             $matcher = new $engineclass($for_regexp, $modifiers);
             if ($answerid !== null) {
                 $this->matchers_cache[$answerid] =& $matcher;
@@ -372,7 +371,7 @@ class qtype_preg_question extends question_graded_automatically
                 $wronghead = substr($currentanswer, 0, $firstindex);
             }
             $correctpart = '';
-            if ($firstindex > -1) {//there were any matched characters
+            if ($firstindex != qtype_preg_matching_results::NO_MATCH_FOUND) {//there were any matched characters
                 $correctpart = substr($currentanswer, $firstindex, $length);
             }
             $hintedcharacter = '';
@@ -447,7 +446,11 @@ class qtype_preg_question extends question_graded_automatically
             foreach ($matchresults->index_first as $i => $startindex) {
                 $search = '{$'.$i.'}';
                 $length = $matchresults->length[$i];
-                $replace = substr($answer, $startindex, $length);
+                if ($startindex != qtype_preg_matching_results::NO_MATCH_FOUND) {
+                    $replace = substr($answer, $startindex, $length);
+                } else {
+                    $replace = '';
+                }
                 $subject = str_replace($search, $replace, $subject);
             }
         } else {
