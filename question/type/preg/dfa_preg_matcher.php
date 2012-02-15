@@ -3,7 +3,7 @@
 /**
  * Defines class dfa_preg_matcher
  *
- * @copyright &copy; 2010  Kolesov Dmitriy 
+ * @copyright &copy; 2010  Kolesov Dmitriy
  * @author Kolesov Dmitriy, Volgograd State Technical University
  * @license http://www.gnu.org/copyleft/gpl.html GNU Public License
  * @package questions
@@ -12,6 +12,7 @@
 //fa - finite automate
 //marked state, it's mean that the state is ready, all it's passages point to other states(marked and not marked), not marked state isn't ready, it's passages point to nothing.
 
+require_once($CFG->dirroot . '/question/type/preg/questiontype.php');
 require_once($CFG->dirroot . '/question/type/preg/preg_matcher.php');
 require_once($CFG->dirroot . '/question/type/preg/dfa_preg_nodes.php');
 
@@ -19,7 +20,7 @@ class finite_automate_state {//finite automate state
     var $asserts;
     var $passages;//contain numbers of state which can go from this
     var $marked;//if marked then true else false.
-    
+
     function name() {
         return 'finite_automate_state';
     }
@@ -42,7 +43,7 @@ class fptab {//member of follow's map table, use on merge time only
 
 class dfa_preg_matcher extends preg_matcher {
 
-    
+
 
 
     var $connection;//array, $connection[0] for main regex, $connection[<assert number>] for asserts
@@ -55,9 +56,7 @@ class dfa_preg_matcher extends preg_matcher {
     protected $map;//map of symbol's following
     protected $maxstatecount;
     protected $maxpasscount;
-    
-    var $graphvizpath;//path to dot.exe of graphviz, used only for debugging
-    
+
     public function name() {
         return 'dfa_preg_matcher';
     }
@@ -78,7 +77,7 @@ class dfa_preg_matcher extends preg_matcher {
         }
         return false;
     }
-    
+
     protected function is_preg_node_acceptable($pregnode) {
         switch ($pregnode->name()) {
         case 'leaf_charset':
@@ -110,7 +109,7 @@ class dfa_preg_matcher extends preg_matcher {
         $root = $this->from_preg_node($root);
         $root->pregnode->operands[0] = $oldroot;
     }
-    
+
     /**
     *function build determined finite automate, fa saving in $this->finiteautomates[$index], in $this->finiteautomates[$index][0] start state.
     *@param index number of assert (0 for main regex) for which building fa
@@ -147,7 +146,7 @@ class dfa_preg_matcher extends preg_matcher {
                         $passcount++;
                     }
                 }
-                if ($this->connection[$index][$num]->pregnode->type === preg_node::TYPE_LEAF_META && 
+                if ($this->connection[$index][$num]->pregnode->type === preg_node::TYPE_LEAF_META &&
                     $this->connection[$index][$num]->pregnode->subtype === preg_leaf_meta::SUBTYPE_ENDREG) {
                     //if this passage point to end state
                     //end state is imagined and not match with real object, index -1 in array, which have zero and positive index only
@@ -219,6 +218,8 @@ class dfa_preg_matcher extends preg_matcher {
             $found = false;//current character no accepted to fa yet
             $afound = false;
             $akey = false;
+            $mfound = false;
+            $mkey = false;
             reset($this->finiteautomates[$assertnumber][$currentstate]->passages);
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////
             //finding leaf with this character
@@ -230,6 +231,11 @@ class dfa_preg_matcher extends preg_matcher {
                 if ($key != dfa_preg_leaf_meta::ENDREG && $offset + $index <= strlen($string)) {
                     $found = $this->connection[$assertnumber][$key]->pregnode->match($string, $offset + $index, &$length, $casesens);
                 }
+                if ($found && $this->connection[$assertnumber][$key]->pregnode->type == preg_node::TYPE_LEAF_META) {
+                    $mfound = true;
+                    $mkey = $key;
+                    $found  = false;
+                }
                 if ($found && $this->connection[$assertnumber][$key]->pregnode->type == preg_node::TYPE_LEAF_ASSERT) {
                     $afound = true;
                     $akey = $key;
@@ -239,9 +245,15 @@ class dfa_preg_matcher extends preg_matcher {
                     next($this->finiteautomates[$assertnumber][$currentstate]->passages);
                 }
             }
+            if (!$found && $mfound) {
+                $found = true;
+                $key = $mkey;
+                $length = 1;
+            }
             if (!$found && $afound) {
                 $found = true;
                 $key = $akey;
+                $length = 0;
             }
             if ($found) {
                 $foundkey = $key;
@@ -249,7 +261,7 @@ class dfa_preg_matcher extends preg_matcher {
             }
             if (array_key_exists(dfa_preg_leaf_meta::ENDREG, $this->finiteautomates[$assertnumber][$currentstate]->passages)) {
             //if current character is end of string and fa can go to end state.
-                if ($offset + $index == strlen($string)) { //must be end   
+                if ($offset + $index == strlen($string)) { //must be end
                     $found = true;
                     $foundkey = dfa_preg_leaf_meta::ENDREG;
                     $length = 0;
@@ -281,7 +293,7 @@ class dfa_preg_matcher extends preg_matcher {
                     }
                     $currentstate = $this->finiteautomates[$assertnumber][$currentstate]->passages[$key];
                     $end = false;
-                } else { 
+                } else {
                     $end = true;
                 }
             } else {
@@ -310,7 +322,7 @@ class dfa_preg_matcher extends preg_matcher {
             $result->next = 0;
             $result->left = 0;
         //determine next character, which will be correct and increment lenght of matching substring.
-        } elseif (!$assertrequirenext) {//if assert not border next character //$full && $offset + $index-1 < $maxindex && 
+        } elseif (!$assertrequirenext) {//if assert not border next character //$full && $offset + $index-1 < $maxindex &&
             $wres = $this->wave($currentstate, $assertnumber);
             $key = $wres->nextkey;
             $result->left = $wres->left;
@@ -323,7 +335,7 @@ class dfa_preg_matcher extends preg_matcher {
         $result->ismatch = $ismatch;
         return $result;
     }
-    
+
     /**
     *Function search for shortest way from current state to end state
     @param current - number of current state dfa
@@ -402,7 +414,7 @@ class dfa_preg_matcher extends preg_matcher {
             $left++;
         }
     }
-    
+
     /**
     *function append array2 to array1, non unique values not add
     *@param arr1 - first array
@@ -413,9 +425,11 @@ class dfa_preg_matcher extends preg_matcher {
         if (!is_array($arr1)) {
             $arr1 = array();
         }
-        foreach ($arr2 as $value) {
-            if (!in_array($value, $arr1)) {
-                $arr1[] = $value;
+        if (is_array($arr2)) {//TODO: why at some time $arr2 isn't array?
+            foreach ($arr2 as $value) {
+                if (!in_array($value, $arr1)) {
+                    $arr1[] = $value;
+                }
             }
         }
     }
@@ -478,7 +492,7 @@ class dfa_preg_matcher extends preg_matcher {
     }
     /**
     *function check: string1 include string2, or not include, without stock of sequence character
-    *@param string1 - string which may contain string2 
+    *@param string1 - string which may contain string2
     *@param string2 - string which may be included in string1
     *@return true if string1 include string2
     */
@@ -501,7 +515,7 @@ class dfa_preg_matcher extends preg_matcher {
     *@return concatenated list of follow chars
     */
     function followposU($number, $fpmap, $passages, $index) {
-        if ($this->connection[$index][$number]->pregnode->type == preg_node::TYPE_LEAF_META && 
+        if ($this->connection[$index][$number]->pregnode->type == preg_node::TYPE_LEAF_META &&
             $this->connection[$index][$number]->pregnode->subtype == preg_leaf_meta::SUBTYPE_ENDREG) {
             $res = array();
             return $res;
@@ -512,36 +526,25 @@ class dfa_preg_matcher extends preg_matcher {
             foreach ($this->connection[$index] as $num => $cc) {//forming vector of equivalent numbers
                 if ($cc->pregnode->type == preg_node::TYPE_LEAF_CHARSET) {
                     $str2 = $cc->pregnode->charset;
-                    $equdirection = $cc->pregnode->negative === $this->connection[$index][$number]->pregnode->negative; 
+                    $equdirection = $cc->pregnode->negative === $this->connection[$index][$number]->pregnode->negative;
                     if (dfa_preg_matcher::is_include_characters($str1, $str2) && array_key_exists($num, $passages) && $equdirection) {//if charclass 1 and 2 equivalenta and number exist in passages
                         array_push($equnum, $num);
                     }
+                } else if ($cc->pregnode->type == preg_node::TYPE_LEAF_META && $cc->pregnode->subtype == preg_leaf_meta::SUBTYPE_DOT && array_key_exists($num, $passages)) {
+                    array_push($equnum, $num);
                 }
             }
         } elseif ($this->connection[$index][$number]->pregnode->type == preg_node::TYPE_LEAF_META) {//if this leaf is metacharacter
             foreach ($this->connection[$index] as $num => $cc) {
-                if ($cc->pregnode->type == preg_node::TYPE_LEAF_META && $cc->pregnode->subtype == $this->connection[$index][$number]->pregnode->subtype) {
+                if ($cc->pregnode->type == preg_node::TYPE_LEAF_META && $cc->pregnode->subtype == $this->connection[$index][$number]->pregnode->subtype && array_key_exists($num, $passages)) {
+                    array_push($equnum, $num);
+                } else if ($cc->pregnode->type == preg_node::TYPE_LEAF_META && $cc->pregnode->subtype == preg_leaf_meta::SUBTYPE_DOT && array_key_exists($num, $passages)) {
                     array_push($equnum, $num);
                 }
             }
-        } elseif ($this->connection[$index][$number]->pregnode->type == preg_node::TYPE_LEAF_ASSERT) {//if this leaf is metacharacter
+        } elseif ($this->connection[$index][$number]->pregnode->type == preg_node::TYPE_LEAF_ASSERT) {//if this leaf is assert
             foreach ($this->connection[$index] as $num => $cc) {
-                if ($cc->pregnode->type == preg_node::TYPE_LEAF_ASSERT && $cc->pregnode->subtype == $this->connection[$index][$number]->pregnode->subtype) {
-                    array_push($equnum, $num);
-                }
-            }
-        } elseif ($this->connection[$index][$number]->pregnode->type == preg_node::TYPE_LEAF_COMBO) {
-            foreach ($this->connection[$index] as $num => $cc) {
-                $cmpop = true;
-                if ($cc->pregnode->type == preg_node::TYPE_LEAF_COMBO) {
-                    if ($cc->pregnode->childs[0]->type != $this->connection[$index][$number]->pregnode->childs[1]->type ||
-                        $cc->pregnode->childs[0]->subtype != $this->connection[$index][$number]->pregnode->childs[1]->subtype ||
-                        $cc->pregnode->childs[0]->negative != $this->connection[$index][$number]->pregnode->childs[1]->negative ||
-                        $cc->pregnode->childs[0]->type == preg_node::TYPE_LEAF_CHARSET && $cc->pregnode->childs[0]->charset != $this->connection[$index][$number]->pregnode->childs[1]->charset) {
-                        $cmpop = false;
-                    }
-                }
-                if ($cc->pregnode->type == preg_node::TYPE_LEAF_COMBO && $cc->pregnode->subtype == $this->connection[$index][$number]->pregnode->subtype) {
+                if ($cc->pregnode->type == preg_node::TYPE_LEAF_ASSERT && $cc->pregnode->subtype == $this->connection[$index][$number]->pregnode->subtype && array_key_exists($num, $passages)) {
                     array_push($equnum, $num);
                 }
             }
@@ -567,7 +570,9 @@ class dfa_preg_matcher extends preg_matcher {
             if ($passcount != count($this->finiteautomates[$index][$i]->passages)) {
                 $flag = false;
             }
-            reset($state);
+            if(is_array($state)) {//TODO: why at some time state==null?
+                reset($state);
+            }
             reset($this->finiteautomates[$index][$i]->passages);
             for ($j=0; $flag && $j < $passcount; $j++) {
                 if (key($state) != key($this->finiteautomates[$index][$i]->passages)) {
@@ -590,12 +595,6 @@ class dfa_preg_matcher extends preg_matcher {
     function __construct($regex = null, $modifiers = null) {
         global $CFG;
         $this->picnum=0;
-        if (isset($CFG->qtype_preg_graphvizpath)) {
-            $this->graphvizpath = $CFG->qtype_preg_graphvizpath;//in few unit tests dfa_preg_matcher objects create without regex,
-                                                  //but dfa will be build later and need for drawing dfa may be
-        } else {
-            $this->graphvizpath = 1;
-        }
         if (isset($CFG->qtype_preg_dfastatecount)) {
             $this->maxstatecount = $CFG->qtype_preg_dfastatecount;
         } else {
@@ -622,7 +621,7 @@ class dfa_preg_matcher extends preg_matcher {
         $this->roots[0]->firstpos();
         $this->roots[0]->lastpos();
         $this->roots[0]->followpos($this->map[0]);
-        $this->split_leafs(0);
+        //$this->split_leafs(0);
         $this->roots[0]->find_asserts($this->roots);
         foreach ($this->roots as $key => $value) {
             if ($key!=0) {
@@ -634,11 +633,11 @@ class dfa_preg_matcher extends preg_matcher {
                 $this->roots[$key]->firstpos();
                 $this->roots[$key]->lastpos();
                 $this->roots[$key]->followpos($this->map[$key]);
-    $this->split_leafs($key);
+                //$this->split_leafs($key);
                 $this->merge_fp_maps($key);
             }
         }
-        $this->buildfa(); // TODO: check for dfa size!
+        $this->buildfa();
         $this->built = true;
         return;
     }
@@ -1045,7 +1044,7 @@ class dfa_preg_matcher extends preg_matcher {
             }
             $afront = $newafront;
             $mfront = $newmfront;
-        } while (count($afront)!=0);       
+        } while (count($afront)!=0);
             //deleting
         foreach ($table as $akey=>$str) {
             foreach ($str as $mkey=>$member) {
@@ -1101,7 +1100,7 @@ class dfa_preg_matcher extends preg_matcher {
                 }
             }
         }
-        
+
     }
     /**
     * DFA node factory
@@ -1120,7 +1119,22 @@ class dfa_preg_matcher extends preg_matcher {
             //TODO write dfa_preg_node_subpatt to process situations like subpattern inside subpattern
             case 'node_subpatt':
                 $pregnode =& $pregnode->operands[0];
+                return $this->from_preg_node($pregnode);
                 break;
+            case 'node_alt':
+                if ($pregnode->operands[1]->type == preg_node::TYPE_LEAF_META && $pregnode->operands[1]->subtype == preg_leaf_meta::SUBTYPE_EMPTY) {
+                    $tmp =& $pregnode->operands[0];
+                    $pregnode = new preg_node_finite_quant;
+                    $pregnode->leftborder = 0;
+                    $pregnode->rightborder = 1;
+                    $pregnode->operands[0] =& $tmp;
+                } else if ($pregnode->operands[0]->type == preg_node::TYPE_LEAF_META && $pregnode->operands[0]->subtype == preg_leaf_meta::SUBTYPE_EMPTY) {
+                    $tmp =& $pregnode->operands[1];
+                    $pregnode = new preg_node_finite_quant;
+                    $pregnode->leftborder = 0;
+                    $pregnode->rightborder = 1;
+                    $pregnode->operands[0] =& $tmp;
+                }
         }
         return parent::from_preg_node($pregnode);
     }
@@ -1135,7 +1149,7 @@ class dfa_preg_matcher extends preg_matcher {
     /**
     * Function converts operand{} quantificator to operand and operand? combination
     * @param node node with {}
-    * @return node subtree with ? 
+    * @return node subtree with ?
     */
     protected function &convert_finite_quant($node) {
         if (!($node->leftborder==0 && $node->rightborder==1 || $node->leftborder==1 && $node->rightborder==1)) {
@@ -1217,31 +1231,21 @@ class dfa_preg_matcher extends preg_matcher {
     *@return result of compring, see compare function for format of result
     */
     function match_inner($response) {
-        if ($response == '') {
-            if ($this->roots[0]->pregnode->operands[0]->nullable) {
-                $this->is_match = true;
-                $this->full = true;
-                $this->index_first[0] = 0;
-                $this->index_last[0] = 0;
-                $this->next = '';
-                $this->left = 0;
-            } else {
-                $this->is_match = false;
-                $this->full = false;
-                $this->index_first[0] = -1;
-                $this->index_last[0] = -2;
-                $waveres = $this->wave(0, 0);
-                $this->next = $this->connection[0][$waveres->nextkey];
-                $this->left = $waveres->left;
-            }
+        if ($response == '' && $this->roots[0]->pregnode->operands[0]->nullable) {
+            $this->is_match = true;
+            $this->full = true;
+            $this->index_first[0] = 0;
+            $this->index_last[0] = -1;
+            $this->next = '';
+            $this->left = 0;
         } else {
             $result = new stdClass;
             $result->full = false;
             $result->index = -1;
             $result->left = 999999;
-            for ($i=0; $i<strlen($response) && !$result->full; $i++) {
+            for ($i=0; $i<=strlen($response) && !$result->full; $i++) {
                 $tmpres = $this->compare($response, 0, $i, $this->anchor->end);
-                if ($tmpres !== false) { 
+                if ($tmpres !== false) {
                     if ($tmpres->full || $tmpres->left < $result->left || !isset($result->next)&&false) {
                         $result = $tmpres;
                     }
@@ -1249,9 +1253,9 @@ class dfa_preg_matcher extends preg_matcher {
                 //TODO: error message about zero length loop
                 }
             }
-        
 
-            $this->is_match =  $result->ismatch;
+
+            $this->is_match =  $result->full || $result->index >= 0;
             $this->full = $result->full;
             $this->index_first[0] = $result->offset;
             $this->index_last[0] = $result->index+$result->offset;
@@ -1287,7 +1291,7 @@ class dfa_preg_matcher extends preg_matcher {
                         'true forward assert                        - (?=...)',
                         'grouping                                   - (?:...)'
                        );
-        return $result;               
+        return $result;
     }
     public function print_connection($index) {
         foreach ($this->connection[$index] as $num=>$leaf) {
@@ -1302,23 +1306,22 @@ class dfa_preg_matcher extends preg_matcher {
     * @param number number of drawing finite automate
     * @param $subject type of drawing, may be: 'dfa', 'tree', 'fp'
     */
-    public function draw ($number, $subject) {
-        global $CFG;
-        if ($this->graphvizpath===1) {
-            echo '<br>ERROR: Missed path to GraphViz!<br>Can\'t draw '.$subject.'.';
-            return;
-        }
-        $tempfolder = $CFG->dirroot . '\\question\\type\\preg\\temp\\';
+    public function draw($number, $subject) {
+        $qtypeobj = new qtype_preg();
+        $dir = $qtypeobj->get_temp_dir('dfa');
         $dotcode = call_user_func(array('dfa_preg_matcher', 'generate_'.$subject.'_dot_code'), $number);
-        $dotfile = fopen($tempfolder.'dotcode.dot', 'w');
+        $dotfn = $dir.'/dotcode.dot';
+        $dotfile = fopen($dotfn, 'w');
         foreach ($dotcode as $dotstring) {
             fprintf($dotfile, "%s\n", $dotstring);
         }
         fclose($dotfile);
-        chdir($this->graphvizpath);
-        exec('dot.exe -Tjpg -o"'.$tempfolder.$subject.$this->picnum.'.jpg" -Kdot "'.$tempfolder.'dotcode.dot"');
-        echo '<IMG src="/question/type/preg/temp/'.$subject.$this->picnum.'.jpg" alt="Can\'t display '.$subject.' #'.$this->picnum.' graph.">';
-        'IMG src="/question/type/preg/temp/'.$subject.$this->picnum.'.jpg" alt="Can\'t display '.$subject.' #'.$this->picnum.' graph."';
+        $jpgfilename = $subject.$this->picnum.'.jpg';
+        $qtypeobj->execute_dot($dotfn, $jpgfilename);
+        unlink($dotfn);
+        //exec('dot.exe -Tjpg -o"'.$tempfolder..'.jpg" -Kdot "'.$tempfolder.'dotcode.dot"');
+        //echo '<IMG src="/question/type/preg/temp/'.$subject.$this->picnum.'.jpg" alt="Can\'t display '.$subject.' #'.$this->picnum.' graph.">';
+        //'IMG src="/question/type/preg/temp/'.$subject.$this->picnum.'.jpg" alt="Can\'t display '.$subject.' #'.$this->picnum.' graph."';
         $this->picnum++;
     }
     /**

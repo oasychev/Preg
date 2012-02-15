@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Short answer question definition class.
+ * Perl-compatible regular expression question definition class.
  *
  * @package    qtype
  * @subpackage preg
@@ -329,10 +329,16 @@ class qtype_preg_question extends question_graded_automatically
             }
             return array('wronghead' => $wronghead, 'correctpart' => $correctpart, 'hintedcharacter' => $hintedcharacter, 'wrongtail' => $wrongtail);
         }
+
         //No match - all response is wrong, but we could hint the very first character still
-        $result = array('wronghead' => $currentanswer, 'correctpart' => '', 'hintedcharacter' => '', 'wrongtail' => '');
-        if (isset($matchresults['next'])) {//if hint possible
-            $result['hintedcharacter'] = $matchresults['next'];
+        $queryengine = $this->get_query_matcher($this->engine);
+        if ($queryengine->is_supporting(preg_matcher::PARTIAL_MATCHING)) {
+            $result = array('wronghead' => $currentanswer, 'correctpart' => '', 'hintedcharacter' => '', 'wrongtail' => '');
+            if (isset($matchresults['next'])) {//if hint possible
+                $result['hintedcharacter'] = $matchresults['next'];
+            }
+        } else {//If there is no partial matching hide colored string when no match to not mislead the student who start his answer correctly
+            $result = null;
         }
         return $result;
     }
@@ -380,14 +386,16 @@ class qtype_preg_question extends question_graded_automatically
 
     //we need adaptive (TODO interactive) behavour to use hints
      public function make_behaviour(question_attempt $qa, $preferredbehaviour) {
-        if ($preferredbehaviour == 'adaptive') {
-             question_engine::load_behaviour_class('adaptivewithhint');
-             return new qbehaviour_adaptivewithhint($qa, $preferredbehaviour);
+        global $CFG;
+
+        if ($preferredbehaviour == 'adaptive' && file_exists($CFG->dirroot.'/question/behaviour/adaptivehints/')) {
+             question_engine::load_behaviour_class('adaptivehints');
+             return new qbehaviour_adaptivehints($qa, $preferredbehaviour);
         }
 
-        if ($preferredbehaviour == 'adaptivenopenalty') {
-             question_engine::load_behaviour_class('adaptivehintnopenalties');
-             return new qbehaviour_adaptivehintnopenalties($qa, $preferredbehaviour);
+        if ($preferredbehaviour == 'adaptivenopenalty' && file_exists($CFG->dirroot.'/question/behaviour/adaptivehintsnopenalties/')) {
+             question_engine::load_behaviour_class('adaptivehintsnopenalties');
+             return new qbehaviour_adaptivehintsnopenalties($qa, $preferredbehaviour);
         }
 
         return parent::make_behaviour($qa, $preferredbehaviour);
