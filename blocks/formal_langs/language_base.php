@@ -72,26 +72,27 @@ abstract class block_formal_langs_abstract_language {
     }
 
     /**
-     * Returns stream of tokens.
+     * Fills token stream field of the processed string objects
      *
      * Add lexical errors if any exists.
-     * @param $text - input text.
-     * @return block_formal_langs_token_stream object, containing a list of tokens and lexical errors
+     * @param object block_formal_langs_processed_string object with string filled
+     *
      */
-    public function scan($text) {
-        $this->scaner->tokenize($text);
+    public function scan($processedstring) {
+        $this->scaner->tokenize($processedstring);
     }
     
     /**
-     * Returns Abstract Syntax Tree.
+     * Fills syntax tree field of the processed string objects.
      *
      * Add errors for answer parsing
-     * @param $tokens - input array of tokens
+     * @param $processedstring - block_formal_langs_processed_string object with string filled
      * @param $iscorrect boolean true if we need to reduce to start symbol (correct text parsing), false if not (compared text parts parsing)
-     * @return array of objects of ast (or tree roots) - should contain one element for answer parsing
      */
-    public function parse($tokens, $iscorrect) {
-        $this->parser->parse($tokens, $iscorrect);
+    public function parse($processedstring, $iscorrect) {
+        //TODO - think about how should be done compared string parsing and what additional info is needed
+        //TODO check if string isn't scanned and scan if necessary
+        $this->parser->parse($processedstring, $iscorrect);
     }
 
     /**
@@ -115,73 +116,6 @@ abstract class block_formal_langs_abstract_language {
         }
     }
 
-    /**
-     * Returns count of nodes which needs description or special name.
-     *
-     * @return integer
-     */
-    public function nodes_requiring_description_count() {//TODO - name
-        if ($this->could_parse()) {
-            return $this->parser->nodes_requiring_description_count();
-        } else {
-            return $this->scaner->tokens_count();
-        }
-    }
-
-    /**
-     * Returns list of node objects which requires description.
-     *
-     * @param $answer - moodle answer object
-     * @return array of node objects
-     */
-    public function nodes_requiring_description_list($answer) {
-        // TODO: return node objects
-        // connect moodle DB by answerid
-        if ($this->could_parse()) {
-            /*$result = $this->scaner->token_list();
-            return concatenate_arrays($result, $this->parser->nonterminal_list());
-            */ // TODO - get only nodes requiring user-defined description from the parser
-        } else {
-            return $this->scaner->token_list();
-        }
-    }
-
-    /**
-     * Returns description string for passed node.
-     *
-     * @param $nodenumber number of node
-     * @return string - description of node
-     */
-    public function node_description($nodenumber, $answerid) {
-        // TODO:
-        // connect moodle DB
-        // SELECT description FROM moodle_descriptions_table
-        // AS mtul WHERE mtut.langid == $this->id AND mtut.number
-        // == $node->id AND mtut.answerid == $this->answerid;
-        //cache descriptions
-        //Parser, if enabled, could generate descriptions for the nodes not stored in DB
-        $desc = '';
-        return $desc;
-    }
-
-    /**
-     * Returns list of node descriptions.
-     *
-     * @param $answer - moodle answer object
-     * @return array of strings, keys are node numbers
-     */
-    public function node_descriptions_list($answer) {
-        // connect moodle DB by answerid
-        //cache descriptions
-        //Parser, if enabled, could generate descriptions for the nodes not stored in DB
-        //TODO - should the function return only nodes with user-defined description or descpriptions for all nodes? Probably first...
-        if (is_parser_enabled()) {
-            $result = $this->scaner->token_name_list();
-            return concatenate_arrays($result, $this->parser->nonterminal_name_list());
-        } else {
-            return $this->scaner->token_name_list();
-        }
-    }
 }
 
 /**
