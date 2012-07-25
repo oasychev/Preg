@@ -331,7 +331,7 @@ MODIFIER = [iJmsUx]
             $cc = qtype_poasquestion_string::substr($cc, 0, $cclength);
             // Form the error node.
             $error = new qtype_preg_node_error();
-            $error->subtype = qtype_preg_node_error::SUBTYPE_INCORRECT_RANGE;
+            $error->subtype = qtype_preg_node_error::SUBTYPE_INCORRECT_CHARSET_RANGE;
             $error->indfirst = $this->yychar - 2;
             $error->indlast = $this->yychar + $this->yylength() - 1;
             $error->userinscription = $startchar . '-' . $endchar;
@@ -534,7 +534,7 @@ MODIFIER = [iJmsUx]
     $node = $this->form_node($this->yytext(), 'qtype_preg_node_finite_quant', null, null, $leftborder, $rightborder, $lazy, $greed, $possessive);
     if ($leftborder > $rightborder) {
         $error = new qtype_preg_node_error();
-        $error->subtype = qtype_preg_node_error::SUBTYPE_INCORRECT_RANGE;
+        $error->subtype = qtype_preg_node_error::SUBTYPE_INCORRECT_QUANT_RANGE;
         $error->indfirst = $this->yychar + 1;
         $error->indlast = $this->yychar + $this->yylength() - 2;
         $error->userinscription = qtype_poasquestion_string::substr($text, 1, $textlen - 2);
@@ -1040,23 +1040,21 @@ MODIFIER = [iJmsUx]
     throw new Exception('\R is not implemented yet');
 }
 <YYINITIAL> "\b"|"\B" {
-    $res = $this->form_res(preg_parser_yyParser::PARSLEAF, $this->form_node($this->yytext(), 'qtype_preg_leaf_assert', qtype_preg_leaf_assert::SUBTYPE_WORDBREAK));
+    $res = $this->form_res(preg_parser_yyParser::PARSLEAF, $this->form_node($this->yytext(), 'qtype_preg_leaf_assert', qtype_preg_leaf_assert::SUBTYPE_ESC_B));
     $res->value->negative = ($this->yytext() === '\B');
     return $res;
 }
 <YYINITIAL> "\A" {
-    // TODO: matches at the start of the subject. For now the same as ^.
-    $res = $this->form_res(preg_parser_yyParser::PARSLEAF, $this->form_node($this->yytext(), 'qtype_preg_leaf_assert', qtype_preg_leaf_assert::SUBTYPE_CIRCUMFLEX));
+    $res = $this->form_res(preg_parser_yyParser::PARSLEAF, $this->form_node($this->yytext(), 'qtype_preg_leaf_assert', qtype_preg_leaf_assert::SUBTYPE_ESC_A));
     return $res;
 }
 <YYINITIAL> "\z"|"\Z" {
-    // TODO: matches only at the end of the subject | matches at the end of the subject also matches before a newline at the end of the subject. For now the same as $.
-    $res = $this->form_res(preg_parser_yyPARSER::PARSLEAF, $this->form_node($this->yytext(), 'qtype_preg_leaf_assert', qtype_preg_leaf_assert::SUBTYPE_DOLLAR));
+    $res = $this->form_res(preg_parser_yyPARSER::PARSLEAF, $this->form_node($this->yytext(), 'qtype_preg_leaf_assert', qtype_preg_leaf_assert::SUBTYPE_ESC_Z));
+    $res->value->negative = ($this->yytext() === '\Z');
     return $res;
 }
 <YYINITIAL> "\G" {
-    // TODO: matches at the first matching position in the subject. For now the same as ^.
-    $res = $this->form_res(preg_parser_yyParser::PARSLEAF, $this->form_node($this->yytext(), 'qtype_preg_leaf_assert', qtype_preg_leaf_assert::SUBTYPE_CIRCUMFLEX));
+    $res = $this->form_res(preg_parser_yyParser::PARSLEAF, $this->form_node($this->yytext(), 'qtype_preg_leaf_assert', qtype_preg_leaf_assert::SUBTYPE_ESC_G));
     return $res;
 }
 <YYINITIAL> "^" {
