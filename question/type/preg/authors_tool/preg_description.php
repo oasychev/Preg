@@ -21,6 +21,13 @@ require_once($CFG->dirroot . '/question/type/preg/preg_unicode.php');
  */
 class qtype_preg_author_tool_description extends qtype_preg_regex_handler {
     
+    /** @var array with options: array(option name => value) */
+    public $descriptionoptions;// TODO - hide $descriptionoptions
+    // keys are constants below:
+    const OPT_CASELESS                  = 0;    // flag for (?i) !>>must be false by default<<! 
+    const OPT_RANGELIMIT                = 1;    // limit for charset in which it is displayed as a enum of characters
+    const OPT_CHARSET_USERINSCRIPTION   = 2;    // use userinscription for charset description instead of flags (true/false)
+
     /*
      * Construct of parent class parses the regex and does all necessary preprocessing.
      *
@@ -30,49 +37,61 @@ class qtype_preg_author_tool_description extends qtype_preg_regex_handler {
      */
     public function __construct($regex = null, $modifiers = null, $options = null){
         parent::__construct($regex, $modifiers, $options);
+        $this->descriptionoptions = array(  self::OPT_CASELESS => false,
+                                            self::OPT_RANGELIMIT => 5,
+                                            self::OPT_CHARSET_USERINSCRIPTION =>false
+                                         );
     }
-    
+
+
     /**
      * Genegates description of regexp
      * Example of calling:
      * 
-     * description('<span class="description_node_%n%o">%s</span>',' operand','<span class="description">%s</span>');
+     * description('<span class="description_node_%n">%s</span>','<span class="description">%s</span>');
      * 
      * Operator with id=777 will be plased into: <span class="description_node_777">abc</span>.
-     * User defined parts of regex with id=777 will be placed id: <span class="description_node_777  operand">%1 or %2</span>.
+     * User defined parts of regex with id=777 will be placed id: <span class="description_node_777">%1 or %2</span>.
      * Whole string will be placed into <span class="description">string</span>
      * 
      * @param string $wholepattern Pattern for whole decription. Must contain %s - description.
      * @param string $numbering_pattern Pattern to track numbering. 
      * Must contain: %s - description of node;
-     * May contain:  %n - id node.
+     * May contain:  %n - node id.
+     * @param bool $charsetuserinscr use userinscription for charset description instead of flags
      * @return string description.
      */
-    public function description($numbering_pattern,$wholepattern=null){
-
-        $options = array('caseinsensitive' => false);
+    public function description($numbering_pattern,$wholepattern=null,$charsetuserinscr=false,$rangelengthmax=5){
+        
+        $defoptions = $this->descriptionoptions;// save default options
+        // set up options
+        $this->descriptionoptions[self::OPT_CHARSET_USERINSCRIPTION]    = (bool)$charsetuserinscr;
+        $this->descriptionoptions[self::OPT_RANGELIMIT]                 = (int)$rangelengthmax;
+        // make description
         if(isset($this->dst_root)){
-            $string = $this->dst_root->description($numbering_pattern,$options,null,null);
+            $string = $this->dst_root->description($numbering_pattern,null,null);
             $string = self::postprocessing($string);
         }
         else {
            $string = 'tree was not built'; 
         }
+        // put string into $wholepattern
         if($wholepattern !== null && $wholepattern !== ''){
             $string = str_replace('%s',$string,$wholepattern);
         }
+        $this->descriptionoptions = $defoptions;// restore default options
         return $string;
     }
     
     private static function postprocessing($s){
 
         $result = preg_replace('%;((?:</span>)?)]%','\1]',$s);
-        $result = str_replace('not not ','',$result);
+        //$result = str_replace('not not ','',$result); // TODO - analyze this into charset
         return $result;
     }
     
     /**
-     * Calling default description($numbering_pattern,$operand_pattern,$wholepattern=null with default params
+     * Calling default description() with default params
      */
     public function default_description(){
        
@@ -83,10 +102,13 @@ class qtype_preg_author_tool_description extends qtype_preg_regex_handler {
      * for testing
      */
     public function form_description($form){
-        $options = array('caseinsensitive' => false);
-        $result = $this->dst_root->description('%s',$options,null,$form);
+        $result = $this->dst_root->description('%s',null,$form);
         return $result;      
     }
+    
+    /*public function &get_description_options(){
+        return $this->descriptionoptions;
+    }*/
     
     /**
      * Returns the engine-specific node name for the given preg_node name.
@@ -114,10 +136,13 @@ class qtype_preg_author_tool_description extends qtype_preg_regex_handler {
  */
 abstract class qtype_preg_description_node{
     /** @var string pattern for description of current node */    
-    public $resultpattern;
+    public $pattern;
     
     /** @var qtype_preg_node Aggregates a pointer to the automatically generated abstract node */
     public $pregnode;
+    
+    /** @var Reference to array with options */
+    public $options;
     
     /**
      * Constructs node.
@@ -126,7 +151,7 @@ abstract class qtype_preg_description_node{
      * @param type $matcher Reference to handler, which generates nodes.
      */
     public function __construct($node, $matcher) {
-        
+        $this->options = &$matcher->descriptionoptions;
         $this->pregnode = $node;
     }
     
@@ -149,7 +174,7 @@ abstract class qtype_preg_description_node{
      * @param string $form Required form.
      * @return string
      */
-    abstract public function description($numbering_pattern,&$options,$node_parent=null,$form=null);
+    abstract public function description($numbering_pattern,$node_parent=null,$form=null);
     
     /**
      * gets localized string, if required a form it gets localized string for required form
@@ -204,12 +229,13 @@ abstract class qtype_preg_description_leaf extends qtype_preg_description_node{
     /**
      * Redifinition of abstruct qtype_preg_description_node::description()
      */
-    public function description($numbering_pattern,&$options,$node_parent=null,$form=null){
+    public function description($numbering_pattern,$node_parent=null,$form=null){
         
         $description ='';
         $this->pattern = $this->pattern($node_parent,$form);
+        //var_dump($this->pattern);
         $description = $this->numbering_pattern($numbering_pattern,$this->pattern);
-        qtype_preg_description_leaf_option::check_options($this,$description,$options,$form);
+        qtype_preg_description_leaf_option::check_options($this,$description,$form);
         return $description;
     }
 }
@@ -218,116 +244,235 @@ abstract class qtype_preg_description_leaf extends qtype_preg_description_node{
  * Represents a character or a charcter set.
  */
 class qtype_preg_description_leaf_charset extends qtype_preg_description_leaf{
-    
+
+    const FIRST_CHAR    = 0;
+    const INTO_RANGE    = 1;
+    const OUT_OF_RANGE  = 2;
+
     /**
      * Checks if charset contains only one printing character
      */
     public function is_one_char(){
         $flag = $this->pregnode->flags[0][0];
-        return count($this->pregnode->flags)===1 && 
-            $flag->type===qtype_preg_charset_flag::SET &&
-            $flag->data->length()===1 && 
-            self::is_chr_printable($flag->data[0]);
+        return count($this->pregnode->flags)===1 
+            && $flag->type===qtype_preg_charset_flag::SET
+            && $flag->data->length()===1 
+            && self::is_chr_printable(qtype_poasquestion_string::ord($flag->data[0]));
     }
-    
+
+    /**
+     * Gets unicode char from code $code
+     * 
+     * @param int $code decimal code of character
+     * @return string utf8 character;
+     */
+    public static function uchr($code) { 
+        if ($code < 128) { 
+            $utf = chr($code); 
+        } else if ($code < 2048) { 
+            $utf = chr(192 + (($code - ($code % 64)) / 64)); 
+            $utf .= chr(128 + ($code % 64)); 
+        } else { 
+            $utf = chr(224 + (($code - ($code % 4096)) / 4096)); 
+            $utf .= chr(128 + ((($code % 4096) - ($code % 64)) / 64)); 
+            $utf .= chr(128 + ($code % 64)); 
+        } 
+        return $utf;
+    }
+
     /**
      * Checks if a character is printable
      * 
      * @param $utf8chr character (from qtype_poasquestion_string) for check
      */
-    public static function is_chr_printable($utf8chr){
-        return !qtype_preg_unicode::is_in_range($utf8chr,qtype_preg_unicode::C_ranges()) &&
-               !qtype_preg_unicode::is_in_range($utf8chr,qtype_preg_unicode::Z_ranges());
+    public static function is_chr_printable($code){
+        //var_dump($code);
+        return qtype_preg_unicode::search_number_binary($code,qtype_preg_unicode::C_ranges())===false &&
+               qtype_preg_unicode::search_number_binary($code,qtype_preg_unicode::Z_ranges())===false;
     }
-    
+
     /*
      * Returns description of $utf8chr if it is non-printing character, otherwise returns null
      * 
-     * @param $utf8chr character from qtype_poasquestion_string for describe
+     * @param int $code character code
      * @return string|null description of character (if character is non printable) or null.
      */
-    public static function describe_nonprinting($utf8chr,$form=null){
+    public static function describe_nonprinting($code,$form=null){
         // null returns if description is not needed
-        if ($utf8chr === null || $utf8chr === '' || self::is_chr_printable($utf8chr)) {
+        if ($code === null || self::is_chr_printable($code)) {
             return null;
         }
         // ok, character is non-printing, lets find its description in the language file
         $result = '';
-        $ord = qtype_poasquestion_string::ord($utf8chr);
-        if($ord <=32 || $ord==127 || $ord==160 || $ord==173){
-            $result = self::get_form_string('description_char'.$ord,$form);
+        $hexcode = strtoupper(dechex($code));
+        if($code<=32||$code==127||$code==160||$code==173
+            ||$code==8194||$code==8195||$code==8201||$code==8204||$code==8205){
+            $result = self::get_form_string('description_char'.$hexcode,$form);
         } else {
-            $result = str_replace('%code',strtoupper(dechex($ord)),
-                        self::get_form_string('description_char_16value' ,$form)); 
+            $result = str_replace('%code',$hexcode,
+                                  self::get_form_string('description_char_16value' ,$form)); 
+        }
+        return $result;
+    }
+
+     /**
+     * Describes character with code $code
+     * 
+     * @param int|qtype_poasquestion_string $utf8chr character from qtype_poasquestion_string for describe or decimal code of character
+     * @param bool $escapehtml a flag indicating whether to escape html characters (& < > " ')
+     * @param string $form required form
+     * @return string describes of character
+     */ 
+    public static function describe_chr($utf8chr,$escapehtml=true,$form=null){
+        $iscode = is_int($utf8chr);
+        $code = $iscode ? $utf8chr : qtype_poasquestion_string::ord($utf8chr);
+        $result = self::describe_nonprinting($code);
+        if($result===null){
+            //   &        >       <       "       '
+            // &#38;    &#62;   &#60;   &#34;   &#39;
+            if($escapehtml && ($code==34||$code==38||$code==39||$code==60||$code==62)){
+                $result = '&#'.$code.';';
+            } else {
+                $result = $iscode ? self::uchr($utf8chr) : $utf8chr;
+            }
+            $result = str_replace('%char',$result,self::get_form_string('description_char' ,$form));
         }
         return $result;
     }
     
     /**
-     * Describes character
+     * Analyzes the enumeration of characters and finds the range.
+     * Input string will transform to:
+     * array(
+     *     0 => array(10,20),    // range
+     *     1 => 30,              // simple char
+     *     2 => 40,              // simple char
+     *     3 => array(100,200),  // range
+     *     ...
+     * );
      * 
-     * @param $utf8chr character from qtype_poasquestion_string for describe
-     * @param bool $isprintable flag indicating if a character printable
-     * @return string description of character (if character is non printable) or character itself.
-     * */ 
-    public static function describe_chr($utf8chr,&$isprintable,$form=null){
-        $result = self::describe_nonprinting($utf8chr);
-        $isprintable = $result===null;
-        return $result===null ? $utf8chr : $result;
+     * @param $str object of qtype_poasquestion_string.
+     * @return mixed[] array with ranges and simple characters (see description of the function).
+     */
+    public static function find_ranges($str){
+        $lenth = $str->length();
+        if(!($str instanceof qtype_poasquestion_string) && $lenth < 1)
+            return false;
+        $result = array();
+        $rangestart = 0;
+        $prevcode = -1;
+        $state = self::FIRST_CHAR;
+        $curcode = -1;
+        for($i=0;$i<$lenth;$i++){
+            // if-else magic 8-)
+            $curcode = qtype_poasquestion_string::ord($str[$i]);
+            if ($state==self::FIRST_CHAR) {
+                $state = self::OUT_OF_RANGE;
+            } else if ($state == self::INTO_RANGE) {
+                if($curcode-1 != $prevcode){
+                    $state = self::OUT_OF_RANGE;
+                    $result[] = array($rangestart,$prevcode);
+                } 
+            } else if ($state == self::OUT_OF_RANGE) {
+                if($curcode-1 == $prevcode){
+                    $state = self::INTO_RANGE;
+                    $rangestart = $prevcode;
+                } else {
+                    $result[] = $prevcode;
+                }
+            }
+            $prevcode = $curcode;
+        }
+        if($state == self::INTO_RANGE){
+            $result[] = array($rangestart,$prevcode);
+        } else { // hence $state == OUT_OF_RANGE
+            $result[] = $prevcode;
+        }
+        return $result;
     }
-    
-    
+
     /**
      * Convertes charset flag to array of descriptions(strings)
      * 
      * @param qtype_preg_charset_flag $flag flag gor description
-     * @param string[] $characters enumeration of descriptions in charset
+     * @param string[] $characters enumeration of descriptions in charset (updated parameter)
+     * @param string $form required form
      */
-    private static function flag_to_array($flag,&$characters,$form=null) {
-        
+    private function flag_to_array($flag,&$characters,$form=null) {
+
         $temp_str = '';
-        $pseudonym = '';//pseudonym of localized string
-        
+        $ranges = NULL;
+        $rangelength = NULL;
+        $rangelengthmax = NULL;
+
         if ($flag->type === qtype_preg_charset_flag::FLAG || $flag->type === qtype_preg_charset_flag::UPROP) {
-            
             // current flag is something like \w or \pL    
-            $pseudonym = 'description_charflag_'.$flag->data;            
             if($flag->negative == true){
                 // using charset pattern 'description_charset_one_neg' because char pattern 'description_char_neg' has a <span> tag, 
                 // but dont need to highlight this
-                $temp_str = self::get_form_string($pseudonym,$form);
-                $characters[] = str_replace('%characters',$temp_str,self::get_form_string('description_charset_one_neg') ,$form);
+                $temp_str = self::get_form_string('description_charflag_'.$flag->data,$form);
+                $characters[] = str_replace('%characters',$temp_str,self::get_form_string('description_charset_one_neg' ,$form));
             }
             else{
-                $characters[] = self::get_form_string($pseudonym,$form);
+                $characters[] = self::get_form_string('description_charflag_'.$flag->data,$form);
             }
-            
+
         } else if ($flag->type === qtype_preg_charset_flag::SET) {
-            $currentchar = '';
-            // current flag is simple enumeration of characters
-            for ($i=0; $i < $flag->data->length(); $i++) {
-                $currentchar = self::describe_nonprinting($flag->data[$i],$form);
-                $characters[] = $currentchar?$currentchar:str_replace('%char',$flag->data[$i],self::get_form_string('description_char' ,$form));
+            // flag is a simple enumeration of characters
+            if($flag->data->length()==1){
+                $characters[] = self::describe_chr($flag->data[0],true,$form);
+            } else {
+                $ranges = self::find_ranges($flag->data);
+                //var_dump($ranges);
+                $rangelengthmax = $this->options[qtype_preg_author_tool_description::OPT_RANGELIMIT];
+                foreach($ranges as $range){
+                    if(is_int($range)){ // $range is a code of character
+                        $characters[] = self::describe_chr($range,true,$form);
+                    } else { // $range is a range (from A to Z <=> array(65,90) )
+                        $rangelength = $range[1]-$range[0];
+                        if ($rangelength<$rangelengthmax) { // if length of range less than $rangelengthmax it will be displayed as enumeration
+                            for($i=$range[0];$i<=$range[1];$i++){
+                                $characters[] = self::describe_chr($i,true,$form);
+                            }
+                        } else { // otherwise it will be displayed
+                            $temp_str = self::get_form_string('description_charset_range' ,$form);
+                            $temp_str = str_replace('%start',self::describe_chr($range[0],true,$form),$temp_str);
+                            $temp_str = str_replace('%end',self::describe_chr($range[1],true,$form),$temp_str);
+                            $characters[] = $temp_str;
+                        }
+                    }
+                }
             }
-            
         }
-        //return $characters;
     }
-    
+
     /**
      * Redifinition of abstruct qtype_preg_description_node::pattern()
      */
     public function pattern($node_parent=null,$form=null){
-        
+
         $result_pattern = '';
         $characters = array();
+        // check errors
+        if($this->pregnode->error !== NULL){
+            return $this->pregnode->error[0]->error_string();
+        }
         
-        foreach ($this->pregnode->flags as $outer) {
+        // 'not not' fix
+        if( count($this->pregnode->flags)==1 
+            && $this->pregnode->negative == true
+            && $this->pregnode->flags[0][0]->negative === true) {
 
-            self::flag_to_array($outer[0],$characters,$form);
+            $this->pregnode->negative = false;
+            $this->pregnode->flags[0][0]->negative = false;
         }
 
-        if(count($characters)<=1 && $this->pregnode->negative == false){
+        // filling $characters[]
+        foreach ($this->pregnode->flags as $outer) {
+            $this->flag_to_array($outer[0],$characters,$form);
+        }
+
+        // adding resulting patterns
             // Simulation of: 
             // $string['description_charset_one'] = '%characters'; 
             // w/o calling functions
@@ -343,11 +488,11 @@ class qtype_preg_description_leaf_charset extends qtype_preg_description_leaf{
                 $result_pattern = self::get_form_string('description_charset_negative',$form);
             }
             $result_pattern = str_replace('%characters', implode(", ", $characters),$result_pattern);
-            
+
         }
         return $result_pattern;
     }
-    
+
 }
 
 
@@ -355,22 +500,22 @@ class qtype_preg_description_leaf_charset extends qtype_preg_description_leaf{
  * Defines meta-characters that can't be enumerated.
  */
 class qtype_preg_description_leaf_meta extends qtype_preg_description_leaf{
-    
+
     /**
      * Redifinition of abstruct qtype_preg_description_node::pattern()
      */
     public function pattern($node_parent=null,$form=null){
-        
+
         return self::get_form_string('description_empty',$form);
     }
-       
+
 }
 
 /**
  * Defines simple assertions.
  */
 class qtype_preg_description_leaf_assert extends qtype_preg_description_leaf{
-    
+
     /**
      * Redifinition of abstruct qtype_preg_description_node::pattern()
      */
@@ -401,7 +546,7 @@ class qtype_preg_description_leaf_assert extends qtype_preg_description_leaf{
         }
         return $resultpattern;
     }
-    
+
 }
 
 /**
@@ -417,7 +562,7 @@ class qtype_preg_description_leaf_backref extends qtype_preg_description_leaf{
         $resultpattern = str_replace('%number', $this->pregnode->number,$resultpattern);
         return $resultpattern;
     }
-    
+
 }
 
 class qtype_preg_description_leaf_option extends qtype_preg_description_leaf{
@@ -426,11 +571,11 @@ class qtype_preg_description_leaf_option extends qtype_preg_description_leaf{
      * Redifinition of abstruct qtype_preg_description_node::pattern()
      */
     public function pattern($node_parent=null,$form=null){
-        
+
         // TODO - pattern
         return('nodes of options dont presents in trees now...');
     }
-    
+
     /**
      * Using in description functions. 
      * Checks the need for the substitution leaf_options patterns
@@ -439,20 +584,24 @@ class qtype_preg_description_leaf_option extends qtype_preg_description_leaf{
      * @param string $node_pattern description of current node
      * @param array $options array of options
      */
-    public static function check_options($node,&$node_pattern,&$options,$form=null){
+    public static function check_options($node,&$node_pattern,$form=null){
+        $caselesskey = qtype_preg_author_tool_description::OPT_CASELESS;
+        /*if(isset($node->options[$caselesskey])){ //set def value
+            $node->options[$caselesskey] = false;
+        }*/
         
         if(isset($node->pregnode->caseinsensitive)){
 
             //$options['caseinsensitive'] = ($node->pregnode->caseinsensitive === true )?true:false;
-            if($node->pregnode->caseinsensitive === true && $options['caseinsensitive']===false){
-                $options['caseinsensitive'] = true;
+            if($node->pregnode->caseinsensitive === true && $node->options[$caselesskey]===false){
+                $node->options[$caselesskey] = true;
                 $node_pattern = self::get_form_string('description_option_i',$form).$node_pattern;
             }
-            if($node->pregnode->caseinsensitive === false && $options['caseinsensitive']===true){
-                $options['caseinsensitive'] = false;
+            if($node->pregnode->caseinsensitive === false && $node->options[$caselesskey]===true){
+                $node->options[$caselesskey] = false;
                 $node_pattern = self::get_form_string('description_unsetoption_i',$form).$node_pattern;
                 //var_dump(1);
-                
+
             }
         }
         /*else{
@@ -574,7 +723,7 @@ abstract class qtype_preg_description_operator extends qtype_preg_description_no
     /**
      * Redifinition of abstruct qtype_preg_description_node::description()
      */
-    public function description($numbering_pattern,&$options,$node_parent=null,$form=null){
+    public function description($numbering_pattern,$node_parent=null,$form=null){
         
         $description = '';
         $child_description = '';
@@ -587,13 +736,13 @@ abstract class qtype_preg_description_operator extends qtype_preg_description_no
         $find = '/%(\w+)?'.$i.'/';
         while((count($this->operands) >= $i) && preg_match($find,$description,$matches)){
             $form = (count($matches)>=2) ? $matches[1] : null;
-            $child_description = $this->operands[$i-1]->description($numbering_pattern,$options,$this,$form);
+            $child_description = $this->operands[$i-1]->description($numbering_pattern,$this,$form);
             //var_dump($matches[0]);
             $description = str_replace($matches[0],$child_description,$description);
             $i++;
             $find = '/%(\w+)?'.$i.'(\w+)?/';
         }
-        qtype_preg_description_leaf_option::check_options($this,$description,$options,$form);
+        qtype_preg_description_leaf_option::check_options($this,$description,$form);
         return $description;
     }
 }
@@ -896,9 +1045,10 @@ class qtype_preg_description_node_error extends qtype_preg_description_operator 
     public function pattern($node_parent=null,$form=null){
         
         $resultpattern = self::get_form_string('description_errorbefore',null)
-		$need_arrow = false;
-		$operands_places = array();
-        $operandplaces = array();
+                .$this->pregnode->error_string()
+                .self::get_form_string('description_errorafter',null);
+        
+                $operandplaces = array();
 		foreach($this->pregnode->operands as $i => $operand){
 			if(isset($operand)){
                 $operandplaces[] = '%'.($i+1);
