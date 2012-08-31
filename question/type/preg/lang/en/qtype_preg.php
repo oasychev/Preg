@@ -226,13 +226,18 @@ $string['description_recursion_all'] = 'recursive match with whole regular expre
 $string['description_recursion'] = 'recursive match with subpattern #%number';
 $string['description_recursion_name'] = 'recursive match with subpattern  "%name"';
 // TYPE_LEAF_OPTIONS
-$string['description_option_i'] = 'caseless: ';
-$string['description_unsetoption_i'] = 'case sensitive: ';
-/*$string['description_option_s'] = 'dot metacharacter matches \n in following:[%text]';
-$string['description_option_m'] = 'multiline matching:[%text]';
-$string['description_option_x'] = 'ignore white space:[%text]';
-$string['description_option_U'] = 'quantifiers ungreedy by default:[%text]';
-$string['description_option_J'] = 'allow duplicate names:[%text]';*/
+$string['description_option_i'] = 'caseless:';
+$string['description_unsetoption_i'] = 'case sensitive:';
+$string['description_option_s'] = 'dot metacharacter matches \n:';
+$string['description_unsetoption_s'] = 'dot metacharacter does not match \n:';
+$string['description_option_m'] = 'multiline matching:';
+$string['description_unsetoption_m'] = 'not multiline matching:';
+$string['description_option_x'] = 'white spaces in expression was ignored:';
+$string['description_unsetoption_x'] = 'white spaces in expression was not ignored:';
+$string['description_option_U'] = 'quantifiers ungreedy by default:';
+$string['description_unsetoption_U'] = 'quantifiers greedy by default:';
+$string['description_option_J'] = 'allow duplicate names:';
+$string['description_unsetoption_J'] = 'disallow duplicate names:';
 // TYPE_NODE_FINITE_QUANT
 $string['description_finite_quant'] = '%1 is repeated from %leftborder to %rightborder times%greed';
 $string['description_finite_quant_0'] = '%1 is repeated no more %rightborder times or missing%greed';
@@ -250,6 +255,7 @@ $string['description_quant_possessive'] = ' (possessive quantifier)';
 // TYPE_NODE_CONCAT
 $string['description_concat'] = '%1 then %2';
 $string['description_concat_wcomma'] = '%1 then %2';
+$string['description_concat_space'] = '%1 %2';
 $string['description_concat_and'] = '%1 and %2';
 $string['description_concat_short'] = '%1%2';
 // TYPE_NODE_ALT
@@ -260,12 +266,18 @@ $string['description_pla_node_assert'] = 'further text should match: [%1]';
 $string['description_nla_node_assert'] = 'further text should not match: [%1]';
 $string['description_plb_node_assert'] = 'preceding text should match: [%1]';
 $string['description_nlb_node_assert'] = 'preceding text should not match: [%1]';
+$string['description_pla_node_assert_cond'] = 'further text matches: [%1]';
+$string['description_nla_node_assert_cond'] = 'further text does not match: [%1]';
+$string['description_plb_node_assert_cond'] = 'preceding text matches: [%1]';
+$string['description_nlb_node_assert_cond'] = 'preceding text does not match: [%1]';
 // TYPE_NODE_SUBPATT
 $string['description_subpattern'] = 'subpattern #%number: [%1]';
 $string['description_subpattern_once'] = 'once checked subpattern #%number: [%1]';
 $string['description_subpattern_name'] = 'subpattern "%name": [%1]';
 $string['description_subpattern_once_name'] = 'once checked subpattern "%name": [%1]';
-// TYPE_NODE_COND_SUBPATT
+$string['description_grouping'] = 'grouping: [%1]';
+$string['description_grouping_duplicate'] = 'grouping (reset group numbers for capturing groups in each alternative): [%1]';
+// TYPE_NODE_COND_SUBPATT (%1 - first option; %2 - second option; %cond - condition )
 $string['description_node_cond_subpatt'] = 'if %cond then check: [%1]%else';
 $string['description_node_cond_subpatt_else'] = ' else check: [%2]';
 $string['description_backref_node_cond_subpatt'] = 'if the subpattern #%number has been successfully matched then check: [%1]%else';
