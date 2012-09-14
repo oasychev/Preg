@@ -1,4 +1,18 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
  * Defines the editing form for the preg question type.
@@ -30,7 +44,7 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
      *      field holding an array of answers
      * @return array of form fields.
      */
-     /*
+     
     function get_per_answer_fields($mform, $label, $gradeoptions,
             &$repeatedoptions, &$answersoption) {
             $repeated = parent::get_per_answer_fields($mform, $label, $gradeoptions, $repeatedoptions, $answersoption);
@@ -41,7 +55,7 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
 
             //$repeated[] = $mform->createElement('html', '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;For test regex push this button<input type="submit" formaction="http://localhost/moodle/question/type/preg/ast_preg_form.php" formtarget="_blank" value="Test regex">');
             return $repeated;
-    }*/
+    }
     /**
      * Add question-type specific form fields.
      *
@@ -57,8 +71,8 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
 
         //$PAGE->requires->js('/question/type/preg/regex_test_push.js');
 
-        //$mform->addElement('html', '<div><script type="text/javascript">preg_www_root = "' . $CFG->wwwroot . '";</script></div>');
-        //$mform->addElement('html', '<div id="script_test"><script type="text/javascript" src="' . $CFG->wwwroot . '/question/type/preg/authors_tool/regex_test_push.js"></script></div>');
+        $mform->addElement('html', '<div><script type="text/javascript">preg_www_root = "' . $CFG->wwwroot . '";</script></div>');
+        $mform->addElement('html', '<div id="script_test"><script type="text/javascript" src="' . $CFG->wwwroot . '/question/type/preg/authors_tool/regex_test_push.js"></script></div>');
 
         $engines = $qtype->available_engines();
         $mform->addElement('select','engine',get_string('engine','qtype_preg'),$engines);

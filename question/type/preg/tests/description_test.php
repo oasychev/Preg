@@ -209,8 +209,10 @@ class qtype_preg_description_test extends PHPUnit_Framework_TestCase {
     public function option_provider()
     {
         return array(
-          array('(a(?i)b)c','subpattern #1: [<span style="color:blue">a</span>caseless: <span style="color:blue">b</span>] then case sensitive: <span style="color:blue">c</span>'),
-          //array('(?i)a|b[a]c','subpattern #1: [<span style="color:blue">a</span>caseless: <span style="color:blue">b</span>] then case sensitive: <span style="color:blue">c</span>'),
+          array('(?i)b','caseless: <span style="color:blue">b</span>'),
+          array('(?i:b)','grouping: [caseless: <span style="color:blue">b</span>]'),
+          array('(a(?i)b)c','subpattern #1: [<span style="color:blue">a</span> then caseless: <span style="color:blue">b</span>] then case sensitive: <span style="color:blue">c</span>'),
+          //array('(?i)a(?u)b(?-i)c(?-u)d','subpattern #1: [<span style="color:blue">a</span>caseless: <span style="color:blue">b</span>] then case sensitive: <span style="color:blue">c</span>'),
         );
     }
 
@@ -234,7 +236,7 @@ class qtype_preg_description_test extends PHPUnit_Framework_TestCase {
     public function test_condmask($regex,$expected)
     {
         $handler = new qtype_preg_author_tool_description($regex,null,null);
-        //var_dump($handler);
+        //if($regex == '(?(?=a)b)' )var_dump($handler);
         $result = $handler->description('%s','%s');
         $this->assertEquals($expected, $result);
     }
@@ -242,11 +244,11 @@ class qtype_preg_description_test extends PHPUnit_Framework_TestCase {
     public function condmask_provider()
     {
         return array(
-          array('(?(?=a)a|b)','if further text should match: [<span style="color:blue">a</span>] then check: [<span style="color:blue">a</span>] else check: [<span style="color:blue">b</span>]'),
-          array('(?(?!a)a|b)','if further text should not match: [<span style="color:blue">a</span>] then check: [<span style="color:blue">a</span>] else check: [<span style="color:blue">b</span>]'),
-          array('(?(?<=a)a|b)','if preceding text should match: [<span style="color:blue">a</span>] then check: [<span style="color:blue">a</span>] else check: [<span style="color:blue">b</span>]'),
-          array('(?(?<!a)a|b)','if preceding text should not match: [<span style="color:blue">a</span>] then check: [<span style="color:blue">a</span>] else check: [<span style="color:blue">b</span>]'),
-          array('(?(?=a)a)','if further text should match: [<span style="color:blue">a</span>] then check: [<span style="color:blue">a</span>]'),
+          array('(?(?=a)b|c)','if further text matches: [<span style="color:blue">a</span>] then check: [<span style="color:blue">b</span>] else check: [<span style="color:blue">c</span>]'),
+          array('(?(?!a)b|c)','if further text does not match: [<span style="color:blue">a</span>] then check: [<span style="color:blue">b</span>] else check: [<span style="color:blue">c</span>]'),
+          array('(?(?<=a)b|c)','if preceding text matches: [<span style="color:blue">a</span>] then check: [<span style="color:blue">b</span>] else check: [<span style="color:blue">c</span>]'),
+          array('(?(?<!a)b|c)','if preceding text does not match: [<span style="color:blue">a</span>] then check: [<span style="color:blue">b</span>] else check: [<span style="color:blue">c</span>]'),
+          array('(?(?=a)b)','if further text matches: [<span style="color:blue">a</span>] then check: [<span style="color:blue">b</span>]'),
           array('(?(1)a)','if the subpattern #1 has been successfully matched then check: [<span style="color:blue">a</span>]'),
           array('(?(name)a)','if the subpattern "name" has been successfully matched then check: [<span style="color:blue">a</span>]'),
           array('(?(<name>)a)','if the subpattern "name" has been successfully matched then check: [<span style="color:blue">a</span>]'),
@@ -273,6 +275,27 @@ class qtype_preg_description_test extends PHPUnit_Framework_TestCase {
         return array(
           array('([abc])','subpattern #1: [one of the following characters: <span style="color:blue">a</span>, <span style="color:blue">b</span>, <span style="color:blue">c</span>]'),
           array('[^\S]','white space'),
+        );
+    }
+    
+    //------------------------------------------------------------------
+
+    /**
+     * @dataProvider subpattern_provider
+     */
+    public function test_subpattern($regex,$expected)
+    {
+        $handler = new qtype_preg_author_tool_description($regex,null,null);
+        //var_dump($handler);
+        $result = $handler->description('%s','%s');
+        $this->assertEquals($expected, $result);
+    }
+
+    public function subpattern_provider()
+    {
+        return array(
+          array('(?:[abc])','grouping: [one of the following characters: <span style="color:blue">a</span>, <span style="color:blue">b</span>, <span style="color:blue">c</span>]'),
+          //array('(?|(a)|(b))','1'), doesnt work now
         );
     }
 
@@ -331,7 +354,7 @@ class qtype_preg_description_dumping_test extends PHPUnit_Framework_TestCase {
         $expected = '000';
         //var_dump($options);
         $handler = new qtype_preg_author_tool_description($regex,null,$options);
-        var_dump($handler);
+        //var_dump($handler);
         $result = $handler->description('%s','%s');
         $this->assertEquals($expected, $result);
     }

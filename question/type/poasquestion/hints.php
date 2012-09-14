@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * This file contains hint definitions, that is used by different poas questions.
+ * Defines hint classes for the POAS abstract question type.
  *
  * Note: interfaces and classes there are intentionally left without qtype_poasquestion prefix as
  *  they are intended for more general Moodle use after hinting behaviours would be complete.
@@ -107,16 +107,16 @@ abstract class qtype_specific_hint {
     abstract public function hint_available($response = null);
 
     /**
-     * Returns whether response is used to calculate penalty (cost) for the hint
+     * Returns whether response is used to calculate penalty (cost) for the hint.
      */
     public function penalty_response_based() {
-        return false;//Most hint have fixed penalty (cost)
+        return false; // Most hint have fixed penalty (cost).
     }
 
     /**
      * Returns penalty (cost) for using specific hint of given hint type (possibly for given response)
-     *
-     * Even if response is used to calculate penalty, hint object should still return an approximation to show to the student if $response is null
+     * Even if response is used to calculate penalty, hint object should still return an approximation
+     * to show to the student if $response is null.
      */
     abstract public function penalty_for_specific_hint($response = null);
 
@@ -128,5 +128,7 @@ abstract class qtype_specific_hint {
     public function button_rendered_by_question() {
         //By default, hint button should be rendered by behaviour.
         return false;
+     * Example of multiple instance hints is teacher-defined text hints or correctwriting question hints,
+     * where could be several misplaced (deleted, extraneous) lexems.
     }
 }

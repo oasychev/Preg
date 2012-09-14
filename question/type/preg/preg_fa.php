@@ -1,4 +1,18 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
  * Defines finite automata states and transitions classes for regular expression matching.
@@ -242,7 +256,7 @@ abstract class qtype_preg_finite_automaton {
         if ($this->state_exists($state)) {
             $this->startstate = $state;
         } else {
-            throw new qtype_preg_exception('set_start_state error: No state '.$stateindex.' in automaton');
+            throw new qtype_preg_exception('set_start_state error: No state ' . $state->number . ' in automaton');
         }
     }
 
@@ -253,7 +267,7 @@ abstract class qtype_preg_finite_automaton {
         if ($this->state_exists($state)) {
             $this->endstate = $state;
         } else {
-            throw new qtype_preg_exception('set_end_state error: No state '.$stateindex.' in automaton');
+            throw new qtype_preg_exception('set_end_state error: No state ' . $state->number . ' in automaton');
         }
     }
 
