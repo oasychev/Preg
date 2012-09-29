@@ -19,7 +19,7 @@ class qtype_preg_author_tool_explain_graph_node {
     public $label   = '';         // data of node on image
     public $id      = -1;          // id of node
     public $fill    = '';         // filling of node on image
-    public $invert  = FALSE;
+    public $invert  = false;
     
     /**
      * Returns count of links in which node is. Searching executes in owner of node.
@@ -32,8 +32,7 @@ class qtype_preg_author_tool_explain_graph_node {
             if ($type) {
                 if ($link->destination == $this)
                     ++$cx;
-            }
-            else {
+            } else {
                 if ($link->source == $this)
                     ++$cx;
             }
@@ -115,13 +114,10 @@ class qtype_preg_author_tool_explain_graph_subgraph {
         foreach ($this->nodes as $iter) {
             //$iter->id = ++qtype_preg_author_tool_explain_graph_subgraph::$counter;
 
-            if ($iter->shape == 'record')
-            {
+            if ($iter->shape == 'record') {
                 $instr .= '"nd' .$iter->id . '" [shape=record, color=black, label=' . qtype_preg_author_tool_explain_graph_subgraph::compute_html($iter->label, $iter->invert) . $iter->fill . '];';
-            }
-            else
-            {
-                $instr .= '"nd' . $iter->id . '" [shape=' . $iter->shape . ', color=' . $iter->color . ', label="' . str_replace(chr(10), '', $iter->label[0]) . '"' . $iter->fill . '];';
+            } else {
+                $instr .= '"nd' . $iter->id . '" [shape=' . $iter->shape . ', color=' . $iter->color . ', label="' . str_replace(chr(10), '', str_replace('"', '\\"', $iter->label[0])) . '"' . $iter->fill . '];';
             }
         }
 
@@ -154,8 +150,7 @@ class qtype_preg_author_tool_explain_graph_subgraph {
                     $elements[] = $lbl[0];
                 else
                     return '"' . $lbl[0] . '"';
-            }
-            else {
+            } else {
                 for ($i = 0; $i < count($lbl); ++$i) {
                         $elements[] = $lbl[$i];
                 }
@@ -181,6 +176,8 @@ class qtype_preg_author_tool_explain_graph_subgraph {
         $result = str_replace(']', '&#93;', $result);
         $result = str_replace('[', '&#91;', $result);
         $result = str_replace('\\', '&#92;', $result);
+        $result = str_replace('{', '&#123;', $result);
+        $result = str_replace('}', '&#125;', $result);
 
         return $result;
     }
@@ -196,19 +193,14 @@ class qtype_preg_author_tool_explain_graph_subgraph {
         $instr .= 'label="' . $gr->label . '";';
 
         foreach ($gr->nodes as $iter) {
-            //$iter->id = ++qtype_preg_author_tool_explain_graph_subgraph::$counter;
-
             if ($iter->shape == 'record')
                 $instr .= '"nd' . $iter->id . '" [shape=record, color=black, label=' . qtype_preg_author_tool_explain_graph_subgraph::compute_html($iter->label, $iter->invert) . $iter->fill . '];';
             else
-            {
                 $instr .= '"nd' . $iter->id . '" [shape=' . $iter->shape . ', color=' . $iter->color . ', label="' . str_replace(chr(10), '', $iter->label[0]) . '"' . $iter->fill .'];';
-            }
         }
 
-        foreach ($gr->subgraphs as $iter) {
+        foreach ($gr->subgraphs as $iter) 
             qtype_preg_author_tool_explain_graph_subgraph::process_subgraph($iter, $instr);
-        }
 
         foreach ($gr->links as $iter) {
             $instr .= '"nd' . $iter->source->id . '" -> "nd';
