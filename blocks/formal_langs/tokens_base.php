@@ -43,7 +43,7 @@ class block_formal_langs_ast {
     }
 
     public function print_tree() {
-        traverse($root, 'print_node');
+        traverse($this->root, 'print_node');
     }
     
     public function traverse($node, $callback) {
@@ -54,7 +54,7 @@ class block_formal_langs_ast {
         }
 
         foreach($node->childs as $child) {//TODO - why no callback for non-leaf nodes?
-            traverse($child, $callback);
+            $this->traverse($child, $callback);
         }
     }
 
@@ -126,7 +126,7 @@ class block_formal_langs_node_position {
                 $maxcolend = $node->colend;
         }
 
-        return new block_formal_langs_node_position($minlinestart, $maxlinened, $mincolstart, $maxcolend);
+        return new block_formal_langs_node_position($minlinestart, $maxlineend, $mincolstart, $maxcolend);
     }
 }
 
@@ -281,6 +281,16 @@ class block_formal_langs_token_base extends block_formal_langs_ast_node_base {
         $this->value = $value;
         $this->position = $position;
         $this->tokenindex = $index;
+    }
+
+    /**
+     * Returns name of lexeme kind
+     * @return name of lexeme kind
+     */
+    public function name() {
+        $className = get_class($this);
+        $name = str_replace('block_formal_langs_','', $className);
+        return $name;
     }
 
     /**
@@ -443,18 +453,39 @@ class block_formal_langs_token_base extends block_formal_langs_ast_node_base {
         }
         return $possible_pairs;
     }
-    
-    
+
+    /**
+     * Returns a string caseinsensitive semantic value of token
+     * @return string
+     */
+    protected function string_caseinsensitive_value() {
+        $value = $this->value;
+        if (is_object($this->value)) {
+            $value = clone $value;
+            $value->tolower();
+            $value = $value->string();
+        } else {
+            $value = textlib::strtolower($value);
+        }
+        return $value;
+    }
     /**
      * Tests, whether other lexeme is the same as this lexeme
      *  
      * @param block_formal_langs_token_base $other other lexeme
+     * @param bool $casesensitive whether we should care about for case sensitive
      * @return boolean - if the same lexeme
      */
-    public function is_same($other) {
+    public function is_same($other, $casesensitive = true) {
         $result = false;
         if ($this->type == $other->type) {
-            $result = $this->value == $other->value;
+            if ($casesensitive) {
+                $result = $this->value == $other->value;
+            }  else {
+                $left = $this->string_caseinsensitive_value();
+                $right = $other->string_caseinsensitive_value();
+                $result = $left == $right;
+            }
         }
         return $result;
     }
@@ -636,6 +667,20 @@ class  block_formal_langs_lexical_error {
      *  @var block_formal_langs_token_base
      */
     public $correctedtoken;
+    /**
+     * A string, which determines a specific error kind.
+     * Can be used by external interface (like CorrectWriting's lexical analyzer)
+     * to handle specifical lexical error
+     * @var string
+     */
+    public $errorkind = null;
+}
+
+/**
+ * A special class for error for scanning
+ */
+class block_formal_langs_scanning_error extends block_formal_langs_lexical_error {
+
 }
 
 /**
