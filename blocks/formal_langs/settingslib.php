@@ -13,22 +13,32 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with Formal Languages block.  If not, see <http://www.gnu.org/licenses/>.
+
+
 /**
- * Version information for the formal languages block.
+ * A library of settings classes for the plugins, using languages from block
  *
  * @package    formal_langs
- * @copyright  2012 Sychev Oleg
+ * @copyright  2013 Sychev Oleg
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'block_formal_langs';
-$plugin->version  = 2013041400;
-$plugin->requires = 2011121310;
-$plugin->release = 'Formal languages 2.2';
-$plugin->maturity = MATURITY_STABLE;
+/**
+ * Admin settings class for a language select with lazy loading
+ */
+class block_formal_langs_admin_setting_language extends admin_setting_configselect {
+    public function load_choices() {
+        global $CFG;
 
-$plugin->dependencies = array(
-    'qtype_poasquestion' => 2012060900
-);
+        if (is_array($this->choices)) {
+            return true;
+        }
+
+        require_once($CFG->dirroot . '/blocks/formal_langs/block_formal_langs.php');
+        $this->choices = block_formal_langs::available_langs();
+
+        return true;
+    }
+
+}
