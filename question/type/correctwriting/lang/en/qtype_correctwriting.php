@@ -43,6 +43,8 @@ $string['foundmistake'] = 'There is mistake in your response:';
 $string['foundmistakes'] = 'There are mistakes in your response:';
 $string['hintgradeborder'] = 'Minimum grade for answer to display mistakes';
 $string['hintgradeborder_help'] = 'Only answers with grade greater or equal this grade will be considered correct and display mistakes and hints. An answers with the lower grades will be used only when exactly matched. You could use an answers with the lower grade to give a special feedback for some mistakes.';
+$string['imageanswer']  = 'Answer: ';
+$string['imageresponse']  = 'Response: ';
 $string['imageanswer']  = 'Correct answer: ';
 $string['imageresponse']  = 'You response: ';
 $string['langid'] = 'Language of the answer';
@@ -54,6 +56,7 @@ $string['lexicalerrorweight'] = 'Penalty for lexical mistake';
 $string['lexicalerrorweight_help'] = 'Penalty for each lexical mistake in student\'s response: a typo, an extra or absent separator etc.';
 $string['maxmistakepercentage'] = 'Maximum percent of mistakes';
 $string['maxmistakepercentage_help'] = 'Maximum allowed number of mistakes in student\'s response as a percent of the number of the tokens in the answer. If the number of mistakes exceed that, answer will be considered not matched at all.';
+$string['mistakentokens'] = 'mistaken tokens';
 $string['movedmistakemessage'] = '{$a} misplaced';
 $string['missingseparator'] = 'Missing separator in "{$a->value}"';
 

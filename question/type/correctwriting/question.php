@@ -416,7 +416,10 @@ class qtype_correctwriting_question extends question_graded_automatically
         return null;
     }
 
-   //Creates all information about mistakes, passed into mistakes
+   /**
+    * Creates all information about mistakes, passed into mistakes
+    * @var qtype_correctwriting_lexical_analyzer $analyzer analuzer, which mistakes are taken
+    */
    public function create_image_information($analyzer) {
        $question = $this;
        $keys = array_keys($question->answers);
@@ -438,7 +441,7 @@ class qtype_correctwriting_question extends question_graded_automatically
        $resultsections[] = implode(',,,',$answertokenvalues);
        //Create response section
        $responsetokenvalues = array();
-       $responsetokens = $analyzer->get_corrected_response();
+       $responsetokens = $analyzer->get_corrected_response()->stream->tokens;
        foreach($responsetokens as $token) {
            $responsetokenvalues[] = base64_encode($token->value());
        }
@@ -452,9 +455,10 @@ class qtype_correctwriting_question extends question_graded_automatically
        foreach($analyzer->mistakes() as $mistake) {
            // If this is lexical mistake, we should mark some lexeme as fixed
            if (is_a($mistake,'qtype_correctwriting_lexical_mistake')) {
-               if ($mistake->correctedresponseindex != null) {
-                   $fixedlexemes[] = $mistake->correctedresponseindex;
-               }
+               // A lexical mistakes are not supported in image, so this is commented part
+               //if ($mistake->correctedresponseindex != null) {
+               //    $fixedlexemes[] = $mistake->correctedresponseindex;
+               //}
            // Track added mistakes
            } elseif (count($mistake->answermistaken) == 0) {
                foreach ($mistake->responsemistaken as $index) {
@@ -495,6 +499,11 @@ class qtype_correctwriting_question extends question_graded_automatically
         if ($preferredbehaviour == 'adaptivenopenalty' && file_exists($CFG->dirroot.'/question/behaviour/adaptivehintsnopenalties/')) {
              question_engine::load_behaviour_class('adaptivehintsnopenalties');
              return new qbehaviour_adaptivehintsnopenalties($qa, $preferredbehaviour);
+        }
+
+        if ($preferredbehaviour == 'interactive' && file_exists($CFG->dirroot.'/question/behaviour/interactivehints/')) {
+             question_engine::load_behaviour_class('interactivehints');
+             return new qbehaviour_interactivehints($qa, $preferredbehaviour);
         }
 
         return parent::make_behaviour($qa, $preferredbehaviour);

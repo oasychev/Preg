@@ -27,7 +27,7 @@ defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot.'/question/type/correctwriting/response_mistakes.php');
 
-// A marker class to indicate errors from sequence_analyzer
+// A marker class to indicate errors from sequence_analyzer.
 abstract class qtype_correctwriting_sequence_mistake extends qtype_correctwriting_response_mistake {
     /**
      * LCS as described in sequence analyzer, used in generating some hints, based on mistakes
@@ -53,40 +53,36 @@ abstract class qtype_correctwriting_sequence_mistake extends qtype_correctwritin
 }
 
 
-// A mistake, that consists from moving one lexeme to different position, than original
+// A mistake, that consists from moving one lexeme to different position, than original.
 class qtype_correctwriting_lexeme_moved_mistake extends qtype_correctwriting_sequence_mistake {
 
     /**
-     * Constructs a new error, filling it with constant message
+     * Constructs a new error, filling it with constant message.
      * @param object $language      a language object
-     * @param array  $answer        answer tokens
+     * @param block_formal_langs_string_pair  $stringpair  a string pair with information about strings
      * @param int    $answerindex   index of answer token
-     * @param array  $response      array response tokens
      * @param int    $responseindex index of response token
      */
-    public function __construct($language,$answer,$answerindex,$response,$responseindex) {
+    public function __construct($language, $stringpair, $answerindex, $responseindex) {
         $this->languagename = $language->name();
 
-        $this->answer = $answer->stream->tokens;
-        $this->response = $response->stream->tokens;
-
-        $this->position = $this->response[$responseindex]->position();
-
-        $this->answerstring = $answer;
+        $this->stringpair = $stringpair;
+        $this->position = $this->stringpair->correctedstring()->stream->tokens[$responseindex]->position();
         $this->mistakemsg = null;
-        //Fill answer data
+        // Fill answer data.
         $this->answermistaken = array();
         $this->answermistaken[] = $answerindex;
-        //Fill response data
+        // Fill response data.
         $this->responsemistaken = array();
         $this->responsemistaken[] = $responseindex;
     }
 
-    /** Performs a mistake message creation if needed
+    /**
+     *Performs a mistake message creation if needed
      */
     public function get_mistake_message() {
         if ($this->mistakemsg === null) {
-            //Create a mistake message.
+            // Create a mistake message.
             $a = $this->token_description($this->answermistaken[0], true, true);
             $this->mistakemsg = get_string('movedmistakemessage', 'qtype_correctwriting', $a);
         }
@@ -94,10 +90,10 @@ class qtype_correctwriting_lexeme_moved_mistake extends qtype_correctwriting_seq
     }
 
     /**
-     * Returns a key, uniquely identifying mistake
+     * Returns a key, uniquely identifying mistake.
      */
     public function mistake_key() {
-        return 'moved_'.$this->answermistaken[0].'_'.$this->responsemistaken[0];//'movedtoken_' is better, but too long for question_attempt_step_data name column (32)
+        return 'moved_'.$this->answermistaken[0].'_'.$this->responsemistaken[0];// 'movedtoken_' is better, but too long for question_attempt_step_data name column (32).
     }
 
     public function supported_hints() {
@@ -105,40 +101,36 @@ class qtype_correctwriting_lexeme_moved_mistake extends qtype_correctwriting_seq
     }
 }
 
-// A mistake, that consists from adding a lexeme to response, that is not in answer
+// A mistake, that consists from adding a lexeme to response, that is not in answer.
 class qtype_correctwriting_lexeme_added_mistake extends qtype_correctwriting_sequence_mistake {
-   /**
-    * Constructs a new error, filling it with constant message
-    * @param object $language      a language object
-    * @param array  $answer        answer tokens
-    * @param array  $response      array response tokens
-    * @param int    $responseindex index of response token
-    */
-    public function __construct($language,$answer,$response,$responseindex) {
+    /**
+     * Constructs a new error, filling it with constant message.
+     * @param object $language      a language object
+     * @param block_formal_langs_string_pair  $stringpair  a string pair with information about strings
+     * @param int    $responseindex index of response token
+     */
+    public function __construct($language, $stringpair, $responseindex) {
         $this->languagename = $language->name();
-
-        $this->answer = $answer->stream->tokens;
-        $this->response = $response->stream->tokens;
-
-        $this->position = $this->response[$responseindex]->position();
-        //Fill answer data
+        $this->stringpair = $stringpair;
+        $this->position = $this->stringpair->correctedstring()->stream->tokens[$responseindex]->position();
+        // Fill answer data.
         $this->answermistaken = array();
-        //Fill response data
+        // Fill response data.
         $this->responsemistaken = array($responseindex);
 
-        $this->answerstring = null;
-
-        //Find, if such token exists in answer (to call it extraneous) or not (to write that it should not be there)
+        // Find, if such token exists in answer (to call it extraneous) or not (to write that it should not be there).
         $exists = false;
-        foreach ($this->answer as $answertoken) {
-            if ($answertoken->value() == $this->response[$responseindex]->value()) {
+        $answertokens = $stringpair->correctstring()->stream->tokens;
+        $responsemistakenvalue =  $stringpair->correctedstring()->stream->tokens[$responseindex]->value();
+        foreach ($answertokens as $answertoken) {
+            if ($answertoken->value() == $responsemistakenvalue) {
                 $exists = true;
                 break;
             }
         }
 
-        //Create a mistake message
-        $data = $this->response[$responseindex]->value();
+        // Create a mistake message.
+        $data = $responsemistakenvalue;
         if (!is_string($data)) {
             $data = $data->string();
         }
@@ -149,43 +141,41 @@ class qtype_correctwriting_lexeme_added_mistake extends qtype_correctwriting_seq
         }
     }
 
-        public function mistake_key() {
-        return 'added_'.$this->responsemistaken[0];//'addedtoken_' is better, but too long for question_attempt_step_data name column (32)
+    public function mistake_key() {
+        return 'added_'.$this->responsemistaken[0];// 'addedtoken_' is better, but too long for question_attempt_step_data name column (32).
     }
 }
 
-// A mistake, that consists of  skipping a lexeme from answer
+// A mistake, that consists of  skipping a lexeme from answer.
 class qtype_correctwriting_lexeme_absent_mistake extends qtype_correctwriting_sequence_mistake {
 
     /**
-     * Constructs a new error, filling it with constant message
+     * Constructs a new error, filling it with constant message.
      * @param object $language      a language object
-     * @param array  $answer        answer tokens
+     * @param block_formal_langs_string_pair  $stringpair  a string pair with information about strings
      * @param int    $answerindex   index of answer token
-     * @param array  $response      array response tokens
      */
-    public function __construct($language,$answer,$answerindex,$response) {
-       $this->languagename = $language->name();
+    public function __construct($language, $stringpair, $answerindex) {
+        $this->languagename = $language->name();
 
-       $this->answer = $answer->stream->tokens;
-       $this->response = $response->stream->tokens;
+        $this->stringpair = $stringpair;
 
-       $this->position = $this->answer[$answerindex]->position();
-       //Fill answer data
-       $this->answermistaken=array();
-       $this->answermistaken[] = $answerindex;
-       //Fill response data
-       $this->responsemistaken = array();
+        $this->position = $this->stringpair->correctstring()->stream->tokens[$answerindex]->position();
+        // Fill answer data.
+        $this->answermistaken=array();
+        $this->answermistaken[] = $answerindex;
+        // Fill response data.
+        $this->responsemistaken = array();
 
-       $this->answerstring = $answer;
-       $this->mistakemsg = null;      
+        $this->mistakemsg = null;
     }
 
-    /** Performs a mistake message creation if needed
+    /** 
+     * Performs a mistake message creation if needed.
      */
     public function get_mistake_message() {
         if ($this->mistakemsg == null) {
-            //Create a mistake message.
+            // Create a mistake message.
             $a = $this->token_description($this->answermistaken[0]);
             $this->mistakemsg = get_string('absentmistakemessage', 'qtype_correctwriting', $a);
         }
@@ -193,12 +183,10 @@ class qtype_correctwriting_lexeme_absent_mistake extends qtype_correctwriting_se
     }
 
     public function mistake_key() {
-        return 'absent_'.$this->answermistaken[0];//'absenttoken_' is better, but too long for question_attempt_step_data name column (32)
+        return 'absent_'.$this->answermistaken[0];// 'absenttoken_' is better, but too long for question_attempt_step_data name column (32).
     }
 
     public function supported_hints() {
         return array('whatis', 'wheretxt', 'wherepic');
     }
 }
-
-?>
