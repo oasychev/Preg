@@ -1305,6 +1305,7 @@ class block_formal_langs_processed_string {
             return count($this->tokenstream->tokens);
         }
     }
+
     /**
      * Returns list of node objects which requires description.
      *
@@ -1319,6 +1320,7 @@ class block_formal_langs_processed_string {
             return $this->tokenstream->tokens;
         }
     }
+
     /**
      * Returns description string for passed node.
      *
@@ -1355,17 +1357,23 @@ class block_formal_langs_processed_string {
             }
         }
     }
+
     /**
      * Returns list of node descriptions.
      *
      * @return array of strings, keys are node numbers
+     * @throws coding_exception on error
      */
     public function node_descriptions_list() {
         global $DB;
         if ($this->descriptions == null) {
+            $istablefilledincorrect = !is_string($this->tablename) || textlib::strlen($this->tablename) == 0;
+            if (!is_numeric($this->tableid)  || $istablefilledincorrect) {
+                throw new coding_exception('Trying to extract descriptions from unknown sources for string');
+            }
             $conditions = array(" tableid='{$this->tableid}' ", "tablename = '{$this->tablename}' ");
             $records = $DB->get_records_select('block_formal_langs_node_dscr', implode(' AND ', $conditions));
-            foreach ($records as $record) {
+            foreach($records as $record) {
                 $this->descriptions[$record->number] = $record->description;
             }
         }
@@ -1412,6 +1420,7 @@ class block_formal_langs_processed_string {
         return $this->language;
     }
 }
+
 /**
  * Represents a pair of correct and compared strings with group of pairs, matching their tokens.
  *
@@ -1421,24 +1430,28 @@ class block_formal_langs_processed_string {
  * 
  */
 class block_formal_langs_string_pair {
+
     /**
      * Correct string, entered by a teacher.
      *
      * @var block_formal_langs_processed_string, created from DB.
      */
     protected $correctstring;
+
     /**
      * Compared (possibly incorrect) string, entered by a student.
      *
      * @var block_formal_langs_processed_string, created from string.
      */
     protected $comparedstring;
+
     /**
      * Matches - define a connection between correct and compared strings.
      *
      * @var block_formal_langs_matches_group
      */
     protected $matches;
+
     /**
      * Corrected string - string, created from compared string by applying all matches.
      *
@@ -1469,6 +1482,7 @@ class block_formal_langs_string_pair {
     public function correctstring() {
         return $this->correctstring;
     }
+
     /**
      * Factory method. Returns an array of block_formal_langs_string_pair objects for each best matches group for that pair of strings
      */
@@ -1484,12 +1498,14 @@ class block_formal_langs_string_pair {
         }
         return $arraystringpairs;
     }
+
     public function __construct($correct, $compared, $matches) {
         $this->correctstring = $correct;
         $this->comparedstring = $compared;
         $this->matches = $matches;
         $this->correctedstring = $this->correct_mistakes();
     }
+
     /**
      * Correct mistakes in compared string using array of matched pairs and correct string.
      *
@@ -1536,6 +1552,7 @@ class block_formal_langs_string_pair {
         // corrected string
         // return $this->comparedstring;
     }
+
     /**
      * Returns description string for passed node. If there is no description, token value from compared string is used, 
      * if it is not available too, than token value from correct string is used.  TODO - check the rules.
