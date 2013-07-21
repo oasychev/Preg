@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Formal Languages block.  If not, see <http://www.gnu.org/licenses/>.
 /**
- * Defines a simple  english language lexer for correctwriting question type.
+ * Defines a printf language lexer for correctwriting question type.
  *
  *
  * @copyright &copy; 2011  Oleg Sychev
@@ -26,9 +26,9 @@
 require_once($CFG->dirroot.'/blocks/formal_langs/tokens_base.php');
 require_once($CFG->dirroot.'/blocks/formal_langs/language_base.php');
 require_once($CFG->dirroot.'/question/type/poasquestion/jlex.php');
-require_once($CFG->dirroot.'/blocks/formal_langs/simple_english_tokens.php');
+require_once($CFG->dirroot.'/blocks/formal_langs/printf_language_tokens.php');
 
-class block_formal_langs_language_simple_english extends block_formal_langs_predefined_language
+class block_formal_langs_language_printf_language extends block_formal_langs_predefined_language
 {
     public function __construct() {
         parent::__construct(null,null);
@@ -45,11 +45,11 @@ class block_formal_langs_language_simple_english extends block_formal_langs_pred
     }
     
     public function name() {
-        return 'simple_english';
+        return 'printf_language';
     }
 
     public function lexem_name() {
-        return get_string('word', 'block_formal_langs');
+        return get_string('part', 'block_formal_langs');
     }
         
 }
@@ -60,8 +60,8 @@ class block_formal_langs_language_simple_english extends block_formal_langs_pred
 %char
 %line
 %unicode
-%class block_formal_langs_predefined_simple_english_lexer_raw
-
+%class block_formal_langs_predefined_printf_language_lexer_raw
+%state STRING
 
 %{
   
@@ -74,7 +74,7 @@ class block_formal_langs_language_simple_english extends block_formal_langs_pred
   
     private function create_token($name, $value) {
         // get name of object
-        $objectname = 'block_formal_langs_token_simple_english_' . $name;
+        $objectname = 'block_formal_langs_token_printf_' . $name;
         // create token object
         $res = new $objectname(null, strtoupper($name), $value, $this->return_pos(), $this->counter);
         // increase token count
@@ -82,10 +82,8 @@ class block_formal_langs_language_simple_english extends block_formal_langs_pred
 
         return $res;
     }
-    private function is_white_space($string) {
-        $whitespace = array(' ', "\t", "\n", "\r", "f", "\v");
-        return in_array($string[0], $whitespace);
-    }
+
+
     private function return_pos() {
         $begin_line = $this->yyline;
         $begin_col = $this->yycol;
@@ -109,15 +107,13 @@ class block_formal_langs_language_simple_english extends block_formal_langs_pred
 %}
 
 
-A = ('|\u2019)
 
 %%
 
-({A}twou{A}dn{A}t|{A}e{A}ll|{A}e{A}s|{A}tisn{A}t|{A}twasn{A}t|{A}twon{A}t|{A}twou{A}d|{A}twouldn{A}t|{A}n{A}|{A}kay|{A}sfoot|{A}taint|{A}tweren{A}t|{A}tshall|{A}twixt|{A}twon{A}t|{A}twou{A}dn{A}t|{A}zat) { return $this->create_token('word',$this->yytext()); }
-({A}cause|{A}d|{A}fraid|{A}hood|i{A}|a{A}|-in{A}|{A}m|mo{A}|{A}neath|o{A}|o{A}th{A}|po{A}|{A}pon|{A}re|{A}round|{A}s|{A}sblood|{A}scuse|{A}sup)                                                             { return $this->create_token('word',$this->yytext()); }
-({A}t|t{A}|th{A}|{A}tis|{A}twas|{A}tween|{A}twere|{A}twill|{A}twould|{A}um|{A}ve|{A}em)                                                                                                                     { return $this->create_token('word',$this->yytext()); }
-[a-zA-Z]+([\u2019'\-][a-zA-Z]+)*([sS]{A}|[oO]{A}|[hH]{A})?                                                                                                                                                  { return $this->create_token('word',$this->yytext()); }
-[0-9]+                                                                                                                                      { return $this->create_token('numeric',$this->yytext()); }
-("."|","|";"|":"|"!"|"?"|"?!"|"!!"|"!!!"|"\""|'|"("|")"|"...")                                                                       { return $this->create_token('punctuation',$this->yytext()); }
-("+"|"-"|"="|"<"|">"|"@"|"#"|"%"|"^"|"&"|"*"|"$")                                                                                           { return $this->create_token('typographic_mark',$this->yytext()); }
-.                                                                                                                                           { if (!$this->is_white_space($this->yytext())) return $this->create_token('other',$this->yytext());}
+<YYINITIAL> "\""           {  $this->yybegin(self::STRING); return $this->create_token('quote',$this->yytext()); }
+<YYINITIAL> [^"\""]+       {  return $this->create_token('text',$this->yytext()); }
+<STRING> "\""       {  $this->yybegin(self::YYINITIAL); return $this->create_token('quote',$this->yytext()); }
+<STRING> "%%"     { return $this->create_token('text',$this->yytext()); }
+<STRING> "%"("-"|"+"|#|0)?([0-9]+|"*")?("."([0-9]+|"*"))?(hh|h|l|ll|j|z|t|l|L)?[diuoxXfFeEgGaAcspn]    { return $this->create_token('specifier',$this->yytext()); }
+<STRING> ([^"\"""%"\\]|\\.)+     { return $this->create_token('text',($this->yytext())); }
+<STRING> .               { return $this->create_token('text',$this->yytext()); }
