@@ -37,10 +37,10 @@
 defined('MOODLE_INTERNAL') || die();
 
 //Other necessary requires
-require_once($CFG->dirroot.'/question/type/correctwriting/syntax_analyzer.php');
-require_once($CFG->dirroot.'/blocks/formal_langs/tokens_base.php');
-require_once($CFG->dirroot.'/question/type/correctwriting/sequence_mistakes.php');
-
+require_once($CFG->dirroot . '/question/type/correctwriting/syntax_analyzer.php');
+require_once($CFG->dirroot . '/blocks/formal_langs/tokens_base.php');
+require_once($CFG->dirroot . '/question/type/correctwriting/sequence_mistakes.php');
+require_once($CFG->dirroot . '/question/type/correctwriting/string_pair.php');
 
 
 class  qtype_correctwriting_sequence_analyzer {
@@ -50,14 +50,18 @@ class  qtype_correctwriting_sequence_analyzer {
 
     /**
      * A string pair with best matches, which can be passed to sequence analyzer
-     * @var block_formal_langs_string_pair
+     * @var qtype_correctwriting_string_pair
      */
     protected $bestmatchpair;
     protected $mistakes;             // Array of mistake objects - student errors (structural errors)
 
     private   $fitness;              // Fitness for response
 
-    private   $question;             // Used question by analyzer
+    /**
+     * Used question by analyzer
+     * @var qtype_correctwriting_question
+     */
+    private   $question;
 
     /**
      * Do all processing and fill all member variables
@@ -72,7 +76,8 @@ class  qtype_correctwriting_sequence_analyzer {
             if ($this->bestmatchpair->correctedstring() == null) {
                 // Scan errors by syntax_analyzer
                 if ($language->could_parse()) {
-                    $analyzer = new qtype_correctwriting_syntax_analyzer($answer, $language, null, null);
+                    $pair = $bestmatchpair->copy_with_lcs(null);
+                    $analyzer = new qtype_correctwriting_syntax_analyzer($question, $pair, $language);
                     $this->errors = $analyzer->errors();
                 }
             } else {
@@ -105,7 +110,8 @@ class  qtype_correctwriting_sequence_analyzer {
     private function scan_response_mistakes($weights) {
         $answertokens = $this->bestmatchpair->correctstring()->stream;
         $responsetokens = $this->bestmatchpair->correctedstring()->stream;
-        $alllcs = qtype_correctwriting_sequence_analyzer::lcs($answertokens, $responsetokens, $this->question->usecase);
+        $options = $this->question->token_comparing_options();
+        $alllcs = qtype_correctwriting_sequence_analyzer::lcs($answertokens, $responsetokens, $options);
         if (count($alllcs) == 0) {
             // If no LCS found perform searching with empty array
             $alllcs[] = array();
@@ -118,8 +124,9 @@ class  qtype_correctwriting_sequence_analyzer {
             $isfirst = true;
             $haserrors = false;
             for ($i = 0;$i < count($alllcs) && $haserrors == false;$i++) {
-                $analyzer = new qtype_correctwriting_syntax_analyzer($this->bestmatchpair, $this->language,
-                                                                     $alllcs[$i]);
+                $pair = $this->bestmatchpair->copy_with_lcs($alllcs[$i]);
+                $analyzer = new qtype_correctwriting_syntax_analyzer($this->question, $this->language,
+                                                                     $pair);
                 $fitness = $analyzer->fitness();
 
                 //If answer has errors stop processing here
@@ -149,10 +156,10 @@ class  qtype_correctwriting_sequence_analyzer {
      * There may be more than one lcs for a given pair of strings.
      * @param  block_formal_langs_token_stream $answerstream  array of answer tokens
      * @param  block_formal_langs_token_stream $responsestream array of response tokens
-     * @param  bool $casesensitive whether comparisons must be case sensitive
+     * @param  block_formal_langs_comparing_options $options options for comparing lexemes
      * @return array array of individual lcs arrays
      */
-    public static function lcs($answerstream, $responsestream, $casesensitive = true) {
+    public static function lcs($answerstream, $responsestream, $options) {
         // Extract data from method
         $answer = $answerstream->tokens;
         $response = $responsestream->tokens;
@@ -162,7 +169,7 @@ class  qtype_correctwriting_sequence_analyzer {
         // Match is defined as tuple <i,j>
         for ($i = 0; $i < count($answer); $i++) {
             for($j = 0; $j < count($response); $j++) {
-                if ($answer[$i]->is_same($response[$j], $casesensitive)) {
+                if ($answer[$i]->is_same($response[$j], $options)) {
                     $matches[] = array($i, $j);
                 }
             }
@@ -339,7 +346,7 @@ class  qtype_correctwriting_sequence_analyzer {
     private function create_added_mistake($responseindex) {
         return new qtype_correctwriting_lexeme_added_mistake($this->language,
                                                              $this->bestmatchpair,
-                                                             $responseindex);
+                                                             $responseindex, $this->question->token_comparing_options());
     }
     /**
      * Creates a new mistake, that represents case, when lexeme is skipped
@@ -392,6 +399,9 @@ class  qtype_correctwriting_sequence_analyzer {
             $responseused[$responseindex] = true;
         }
 
+
+        $options = $this->question->token_comparing_options();
+
         // Determine removed and moved lexemes by scanning answer
         for ($i = 0;$i < $answercount;$i++) {
             // If this lexeme is not in LCS
@@ -401,7 +411,7 @@ class  qtype_correctwriting_sequence_analyzer {
                 $movedpos = -1;
                 for ($j = 0;$j < $responsecount && $ismoved == false;$j++) {
                     // Check whether lexemes are equal
-                    $isequal = $answer[$i]->is_same($response[$j], $this->question->usecase);
+                    $isequal = $answer[$i]->is_same($response[$j], $options);
                     if ($isequal == true && $responseused[$j] == false) {
                         $ismoved = true;
                         $movedpos = $j;

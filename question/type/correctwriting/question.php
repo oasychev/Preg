@@ -30,6 +30,7 @@ require_once($CFG->dirroot . '/question/type/correctwriting/lexical_analyzer.php
 require_once($CFG->dirroot . '/question/type/correctwriting/cw_hints.php');
 require_once($CFG->dirroot . '/blocks/formal_langs/block_formal_langs.php');
 require_once($CFG->dirroot . '/question/type/poasquestion/hints.php');
+require_once($CFG->dirroot . '/question/type/correctwriting/string_pair.php');
 
 /**
  * Represents a correctwriting question.
@@ -313,7 +314,7 @@ class qtype_correctwriting_question extends question_graded_automatically
         $language = $this->get_used_language();
         // Scan answers for match
         foreach($answers as $id => $answer) {
-            $analyzer = new  qtype_correctwriting_lexical_analyzer($this, $answer, $response);
+            $analyzer = $this->make_analyzer($answer, $response);
             //Get lexeme count from answer
             $answerstring = $language->create_from_string($answer->answer);
             $answerstream= $answerstring->stream;
@@ -379,8 +380,17 @@ class qtype_correctwriting_question extends question_graded_automatically
 
         $this->matchedanswerid = $fid;
         $answer = $this->answers[$fid];
-        $this->matchedanalyzer = new  qtype_correctwriting_lexical_analyzer($this, $answer, $response);
+        $this->matchedanalyzer = $this->make_analyzer($answer, $response);
         $this->matchedgradestate = array(0, question_state::$gradedwrong);
+    }
+
+    protected function make_analyzer($answer, $response) {
+        $language = $this->get_used_language();
+        $responsestring = $language->create_from_string($response);
+        $answerstring = $language->create_from_db('question_answers', $answer->id, $answer->answer);
+        $string = new qtype_correctwriting_string_pair($answerstring, $responsestring, null);
+        $analyzer = new qtype_correctwriting_lexical_analyzer($this, $string, $language);
+        return $analyzer;
     }
 
     /**  Returns matching answer. Must return matching answer found when response was being graded.
@@ -574,20 +584,32 @@ class qtype_correctwriting_question extends question_graded_automatically
      * @return boolean
      */
     public function are_lexeme_sequences_equal(block_formal_langs_string_pair $stringpair) {
+
         $responsetokens = $stringpair->correctedstring()->stream->tokens;
         $answertokens =  $stringpair->correctstring()->stream->tokens;
         $same = false;
+        $options = $this->token_comparing_options();
         if (count($responsetokens) == count($answertokens)) {
             $same = true;
             if (count($responsetokens) != 0) {
                 for($i = 0; $i < count($responsetokens); $i++) {
                     /** @var block_formal_langs_token_base $token */
                     $token =   $responsetokens[$i];
-                    $same = ($same && $token->is_same($answertokens[$i], $this->usecase));
+                    $same = ($same && $token->is_same($answertokens[$i], $options));
                 }
             }
         }
         return $same;
+    }
+
+    /**
+     * Returns an options for token comparting
+     * @return block_formal_langs_comparing_options
+     */
+    public function token_comparing_options() {
+        $options = new block_formal_langs_comparing_options();
+        $options->usecase = $this->usecase;
+        return $options;
     }
 
 }
