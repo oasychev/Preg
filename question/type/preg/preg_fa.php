@@ -26,6 +26,9 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+require_once($CFG->dirroot . '/question/type/poasquestion/stringstream/stringstream.php');
+require_once($CFG->dirroot . '/question/type/preg/preg_lexer.lex.php');
+
 /**
  * Represents finite automaton transitions (without subpatterns information).
  *
@@ -469,7 +472,7 @@ abstract class qtype_preg_finite_automaton {
                     }
                     // Current state is not end state.
                     if (!$isendstate) {
-                        //No any interconnecting states.
+                        // No any interconnecting states.
                         if (count($transitions) == 0) {
                             unset($aregone[count($aregone)-1]);
                         }
@@ -525,7 +528,7 @@ abstract class qtype_preg_finite_automaton {
      */
     public function find_state_index($number1, $number2 = -1) {
         $index = -1;
-        // Searching only by first numbers
+        // Searching only by first numbers.
         if ($number2 == -1) {
             for ($i = 0; $i < count($this->states) && $index < 0; $i++) {
                 $num1 = $this->states[$i]->firstnumbers[0];
@@ -534,7 +537,7 @@ abstract class qtype_preg_finite_automaton {
                 }
             }
         } else if ($number1==-1) {
-            // Searching only by second numbers
+            // Searching only by second numbers.
             for ($i = 0; $i < count($this->states) && $index < 0; $i++) {
                 $num2 = $this->states[$i]->secondnumbers[0];
                 if ($num2 == $number2) {
@@ -542,7 +545,7 @@ abstract class qtype_preg_finite_automaton {
                 }
             }
         } else {
-            // Searching by both numbers
+            // Searching by both numbers.
             for ($i = 0; $i < count($this->states) && $index < 0; $i++) {
                 $num1 = $this->states[$i]->firstnumbers[0];
                 $num2 = $this->states[$i]->secondnumbers[0];
@@ -702,9 +705,9 @@ abstract class qtype_preg_finite_automaton {
         if (array_key_exists($transition->to, $outtransitions)) {
             $tran = &$this->adjacencymatrix[$transition->from][$transition->to];
             $tran->pregleaf = $tran->pregleaf->unite_leafs($transition->pregleaf);
-        } else {
+        } else {*/
             $this->adjacencymatrix[$transition->from][$transition->to] = $transition;
-        }
+        //}
     }
 
     /**
@@ -713,15 +716,15 @@ abstract class qtype_preg_finite_automaton {
      * @param state an id of the state to be removed.
      */
     public function remove_state($state) {
-        // Removing row
+        // Removing row.
         unset($this->adjacencymatrix[$state]);
-        // Removing column
+        // Removing column.
         foreach ($this->adjacencymatrix as $curcolumn) {
             if (array_key_exists($state, $curcolumn)) {
                 unset($curcolomn[$state]);
             }
         }
-        // Removing real numbers
+        // Removing real numbers.
         unset($this->statanumbers[$state]);
         $this->statecount--;
     }
@@ -790,8 +793,201 @@ abstract class qtype_preg_finite_automaton {
     /**
      * Read and create a FA from dot-like language. Mainly used for unit-testing.
      */
-    public function read_fa($dotstring) {
-        // TODO - kolesov.
+    public function read_fa($dotstring, $origin = qtype_preg_fa_transition::ORIGIN_TRANSITION_FIRST) {
+        //  Dotstring split into an array of strings.
+        $dotstring = explode("\n",$dotstring);
+        // String of start states split into an array of start states.
+        $startstates = explode(";",$dotstring[1]);
+        // Append start states in automata.
+        for ($i = 0; $i < count($startstates) - 1; $i++) {
+            $startstates[$i] = trim($startstates[$i]);
+            $this->add_state($startstates[$i]);
+            $this->add_start_state(($this->statecount) - 1);
+        }
+        // String of end states split into an array of end states.
+        $endstates = explode(";",$dotstring[2]);
+        // Append end states in automata.
+        for ($i = 0; $i < count($endstates) - 1; $i++) {
+            $endstates[$i] = trim($endstates[$i]);
+            $this->add_state($endstates[$i]);
+            $this->add_end_state(($this->statecount) - 1);
+        }
+        // Append transition in automata.
+        for ($i = 3; $i < (count($dotstring) - 1); $i++) {
+            $arraystrings = preg_split('/(->|\[label="\[|\]"|color=|\];$)/u',$dotstring[$i]);
+            // Delete the spaces at the beginning and end of line.
+            $arraystrings[0] = trim($arraystrings[0]);
+            if(array_search($arraystrings[0], $this->statenumbers) === false) {
+                $this->add_state($arraystrings[0]);
+            }
+            $statefrom = array_search($arraystrings[0], $this->statenumbers);
+            // Delete the spaces at the beginning and end of line.
+            $arraystrings[1] = trim($arraystrings[1]);
+            if(array_search($arraystrings[1], $this->statenumbers) === false) {
+                $this->add_state($arraystrings[1]);
+            }
+            $stateto = array_search($arraystrings[1], $this->statenumbers);
+            // Create transition.
+            $chars = '';
+            $asserts = array();
+            $subpatt_start = array();
+            $subpatt_end = array();
+            $subexpr_start = array();
+            $subexpr_end = array();
+            $currentindex = 0;
+            // Parse a string into components.
+            while($currentindex < strlen($arraystrings[2])) {
+                // If subpatt_start.
+                if($arraystrings[2][$currentindex] == '(') {
+                    if($currentindex == 0 || $arraystrings[2][$currentindex - 1] != '\\') {
+                        while($arraystrings[2][$currentindex] != '/') {
+                            $subpatt_start[] = new qtype_preg_leaf_meta(qtype_preg_leaf_meta::SUBTYPE_EMPTY);
+                            $currentindex++;
+                        }
+                    }
+                    $currentindex++;
+                    // If subexpr_start.
+                    if($arraystrings[2][$currentindex] == '(') {
+                        while($arraystrings[2][$currentindex] == '(') {
+                            $subexpr_start[] = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_SUBEXPR);
+                            $currentindex++;
+                        }
+                    }
+                }
+                // If subexpr_start without subpatt_start.
+                else if($arraystrings[2][$currentindex] == '/' && $arraystrings[2][$currentindex + 1] == '(') {
+                    $currentindex++;
+                    while($arraystrings[2][$currentindex] == '(') {
+                        $subexpr_start[] = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_SUBEXPR);
+                        $currentindex++;
+                    }
+                }
+                // If current symbol is back_slash.
+                else if($arraystrings[2][$currentindex] == '\\') {
+                    switch($arraystrings[2][$currentindex+1]) {
+                        case 'b': $asserts[] = '\\b'; break;
+                        case 'B': $asserts[] = '\\B'; break;
+                        case 'A': $asserts[] = '\\A'; break;
+                        case 'z': $asserts[] = '\\z'; break;
+                        case 'Z': $asserts[] = '\\Z'; break;
+                        case 'G': $asserts[] = '\\G'; break;
+                        default : $chars = $chars.'\\'.$arraystrings[2][$currentindex+1];
+                    }
+                    $currentindex = $currentindex + 2;
+                }
+                // If current symbol is assert.
+                else if($arraystrings[2][$currentindex] == '^' || $arraystrings[2][$currentindex] == '$') {
+                    $asserts[] = $arraystrings[2][$currentindex];
+                    $currentindex++;
+                }
+                // If subexpr_end.
+                else if($arraystrings[2][$currentindex] == ')') {
+                    while($arraystrings[2][$currentindex] != '/') {
+                        $subexpr_end[] = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_SUBEXPR);
+                        $currentindex++;
+                    }
+                    $currentindex++;
+                    // If subpatt_end.
+                    while($currentindex < strlen($arraystrings[2]) && $arraystrings[2][$currentindex] == ')') {
+                        $subpatt_end[] = new qtype_preg_leaf_meta(qtype_preg_leaf_meta::SUBTYPE_EMPTY);
+                        $currentindex++;
+                    }
+                }
+                // If subpatt_end without subexpr_end
+                else if($arraystrings[2][$currentindex] == '/' && $arraystrings[2][$currentindex + 1] == ')') {
+                    $currentindex++;
+                    while($currentindex < strlen($arraystrings[2])) {
+                        $subpatt_end[] = new qtype_preg_leaf_meta(qtype_preg_leaf_meta::SUBTYPE_EMPTY);
+                        $currentindex++;
+                    }
+                }
+                // Current symbol just symbol.
+                else {
+                    $chars = $chars.$arraystrings[2][$currentindex];
+                    $currentindex++;
+                }
+            }
+            // Fill transition.
+            if(strlen($arraystrings[2]) > 0) {
+                if(strlen($chars) != 0) {
+                    $pregleaf = new qtype_preg_leaf_charset();
+                    $chars = '['.$chars.']';
+                    StringStreamController::createRef('regex', $chars);
+                    $pseudofile = fopen('string://regex', 'r');
+                    $lexer = new qtype_preg_lexer($pseudofile);
+                    $pregleaf = $lexer->nextToken()->value;
+                    for($j = 0; $j < count($asserts); $j++) {
+                        switch($asserts[0]) {
+                            case '\\b': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(qtype_preg_leaf_assert::SUBTYPE_ESC_B); break;
+                            case '\\B': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(qtype_preg_leaf_assert::SUBTYPE_ESC_B); break;
+                            case '\\A': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(qtype_preg_leaf_assert::SUBTYPE_ESC_A); break;
+                            case '\\z': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(qtype_preg_leaf_assert::SUBTYPE_ESC_Z); break;
+                            case '\\Z': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(qtype_preg_leaf_assert::SUBTYPE_ESC_Z); break;
+                            case '\\G': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(qtype_preg_leaf_assert::SUBTYPE_ESC_G); break;
+                            case '^': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(qtype_preg_leaf_assert::SUBTYPE_CIRCUMFLEX); break;
+                            case '$': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(qtype_preg_leaf_assert::SUBTYPE_DOLLAR); break;
+                        }
+                    }
+                }
+                else if(count($asserts) != 0) {
+                    $type = '';
+                    switch($asserts[0]) {
+                        case '\\b': $type = SUBTYPE_ESC_B; break;
+                        case '\\B': $type = SUBTYPE_ESC_B; break;
+                        case '\\A': $type = SUBTYPE_ESC_A; break;
+                        case '\\z': $type = SUBTYPE_ESC_Z; break;
+                        case '\\Z': $type = SUBTYPE_ESC_Z; break;
+                        case '\\G': $type = SUBTYPE_ESC_G; break;
+                        case '^': $type = SUBTYPE_CIRCUMFLEX; break;
+                        case '$': $type = SUBTYPE_DOLLAR; break;
+                    }
+                    $pregleaf = new qtype_preg_leaf_assert($type);
+                    for($j = 1; $j < count($asserts); $j++) {
+                        switch($asserts[0]) {
+                            case '\\b': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(SUBTYPE_ESC_B); break;
+                            case '\\B': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(SUBTYPE_ESC_B); break;
+                            case '\\A': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(SUBTYPE_ESC_A); break;
+                            case '\\z': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(SUBTYPE_ESC_Z); break;
+                            case '\\Z': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(SUBTYPE_ESC_Z); break;
+                            case '\\G': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(SUBTYPE_ESC_G); break;
+                            case '^': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(SUBTYPE_CIRCUMFLEX); break;
+                            case '$': $pregleaf->mergedassertions[] = new qtype_preg_leaf_assert(SUBTYPE_DOLLAR); break;
+                        }
+                    }
+                }
+                else {
+                    $pregleaf = new qtype_preg_leaf_charset();
+                }
+                if(count($subpatt_start) == 0 && count($subexpr_start) == 0 && count($subpatt_end) == 0 && count($subexpr_end) == 0) {
+                    $transition = new qtype_preg_fa_transition($statefrom,$pregleaf, $stateto);
+                }
+                else {
+                    $transition = new qtype_preg_nfa_transition($statefrom,$pregleaf, $stateto);
+                    $transition->subpatt_start = $subpatt_start;
+                    $transition->subpatt_end = $subpatt_end;
+                    $transition->subexpr_start = $subexpr_start;
+                    $transition->subexpr_end = $subexpr_end;
+                }
+            }
+            else {
+                $pregleaf = new qtype_preg_leaf_meta(qtype_preg_leaf_meta::SUBTYPE_EMPTY);
+                $transition = new qtype_preg_fa_transition($statefrom, $pregleaf, $stateto);
+            }
+            // Search color of current transition.
+            if ($arraystrings[3] == ',') {
+                // Append color in transition.
+                switch($arraystrings[4]) {
+                case 'violet' : $transition->origin = qtype_preg_fa_transition::ORIGIN_TRANSITION_FIRST; break;
+                case 'blue' : $transition->origin = qtype_preg_fa_transition::ORIGIN_TRANSITION_SECOND; break;
+                case 'red' : $transition->origin = qtype_preg_fa_transition::ORIGIN_TRANSITION_INTER; break;
+                }
+            }
+            else {
+                $transition->origin = $origin;
+            }
+            // Append transition in automata.
+            $this->add_transition($transition);
+        }
     }
 
     /**
@@ -1153,6 +1349,7 @@ abstract class qtype_preg_finite_automaton {
         }
     }
 
+    
     /**
      * Copy and modify automata to stopcoping state or to the end of automata, if stopcoping == NULL.
      *
