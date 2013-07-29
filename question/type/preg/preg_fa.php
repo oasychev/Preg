@@ -374,6 +374,100 @@ class qtype_preg_fa_state {
     public function fill_prev_groups($prev_groups) {
         $this->prev_groups = $prev_groups;
     }
+    
+    /**
+     * Compare two groups.
+     *
+     * @param another - group of states for compare.
+     */
+    public function cmpgroup(&$another) {
+        if (count($this->states) != count($another->states)) {
+            return false;
+        }
+        foreach ($this->states as $thisstate) {
+            $find = false;
+            foreach ($another->states as $anotherstate) {
+                if ($thisstate == anotherstate) {
+                    $find = true;
+                }
+            }
+            if ($find != true) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    public function is_empty() {
+        return (count($this->states) == 0);
+    }
+    
+    public function has_end_states() {
+        $endstates = $this->fa->end_states();
+        foreach ($this->states as $thisstate) {
+            foreach ($endstates as $endstate) {
+                if ($thisstate == $endstate) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Create string with way.
+     *
+     * @param another - group of states from another automata.
+     */
+    public function way_to_string(&$another) {
+        $string = '';
+        for ($i = 0; $i < count($this->prev_groups); $i++) {
+            if($i != 0) {
+                $string .= '-['.$this->prev_groups[$i]->char.']->';
+            }
+            $string .= '[(';
+            for ($j = 0; $j < count($this->prev_groups[$i]->states); $j++) {
+                $string .= $this->fa->statenumbers[$this->prev_groups[$i]->states[$j]];
+                if ($j != count($this->prev_groups[$i]->states) - 1) {
+                    $string .= ',';
+                }
+            }
+            $string .= '),(';
+            for ($j = 0; $j < count($another->prev_groups[$i]->states); $j++) {
+                $string .= $another->fa->statenumbers[$another->prev_groups[$i]->states[$j]];
+                if ($j != count($another->prev_groups[$i]->states) - 1) {
+                    $string .= ',';
+                }
+            }
+            $string .= ')]';
+        }
+        $string .= '-['.$this->char.']->';
+        if (count($this->states) == 0) {
+            $string .= 'no';
+        }
+        else {
+            for ($j = 0; $j < count($this->states); $j++) {
+                $string .= $this->fa->statenumbers[$this->states[$j]];
+                if ($j != count($this->states) - 1) {
+                    $string .= ',';
+                }
+            }
+        }
+        $string .= '),(';
+        if (count($another->states) == 0) {
+            $string .= 'no';
+        }
+        else {
+            for ($j = 0; $j < count($another->prev_groups[$i]->states); $j++) {
+                $string .= $another->fa->statenumbers[$another->prev_groups[$i]->states[$j]];
+                if ($j != count($another->prev_groups[$i]->states) - 1) {
+                    $string .= ',';
+                }
+            }
+        }
+        $string .= ')]';
+        return $string;
+    }
  }
 
 /**
@@ -1151,14 +1245,17 @@ abstract class qtype_preg_finite_automaton {
                 if(strlen($chars) != 0) {
                     $pregleaf = new qtype_preg_leaf_charset();
                     if ($point) {
-                        $chras = '.';
+                        $chars = '.';
                     }
                     else {
                         $chars = '['.$chars.']';
                     }
+                    $options = new qtype_preg_handling_options();
+                    $options->preserveallnodes = true;
                     StringStreamController::createRef('regex', $chars);
                     $pseudofile = fopen('string://regex', 'r');
                     $lexer = new qtype_preg_lexer($pseudofile);
+                    $lexer->set_options($options);
                     $pregleaf = $lexer->nextToken()->value;
                     for($j = 0; $j < count($asserts); $j++) {
                         switch($asserts[0]) {
@@ -1202,16 +1299,12 @@ abstract class qtype_preg_finite_automaton {
                 else {
                     $pregleaf = new qtype_preg_leaf_meta(qtype_preg_leaf_meta::SUBTYPE_EMPTY);
                 }
-                if(count($subpatt_start) == 0 && count($subexpr_start) == 0 && count($subpatt_end) == 0 && count($subexpr_end) == 0) {
-                    $transition = new qtype_preg_nfa_transition($statefrom,$pregleaf, $stateto);
-                }
-                else {
-                    $transition = new qtype_preg_nfa_transition($statefrom,$pregleaf, $stateto);
-                    $transition->subpatt_start = $subpatt_start;
-                    $transition->subpatt_end = $subpatt_end;
-                    $transition->subexpr_start = $subexpr_start;
-                    $transition->subexpr_end = $subexpr_end;
-                }
+                $transition = new qtype_preg_nfa_transition($statefrom,$pregleaf, $stateto);
+                $transition->subpatt_start = $subpatt_start;
+                $transition->subpatt_end = $subpatt_end;
+                $transition->subexpr_start = $subexpr_start;
+                $transition->subexpr_end = $subexpr_end;
+
             }
             else {
                 $pregleaf = new qtype_preg_leaf_meta(qtype_preg_leaf_meta::SUBTYPE_EMPTY);
@@ -1267,6 +1360,86 @@ abstract class qtype_preg_finite_automaton {
     public function compare_fa(&$another, &$differences) {
         // TODO - streltsov.
         return false;
+        if ($P->has_end_states() != $Q->has_end_states()) {
+            $P->way_to_string($Q);
+            if ($P->has_end_states()) {
+                $error = $error.' Only first automata has endstate.';
+            }
+            else {
+                $error = $error.' Only second automata has endstate.';
+            }
+            $differences[] = $error;
+            
+        }
+        else {
+            // Append pair of groups in fifo and stack of groups
+        }
+            unset($fifo[count($fifo)-1]);
+            $P = $fifo[count($fifo)-1];
+            unset($fifo[count($fifo)-1]);
+            // Convert transition.
+            $firsttransitionto = array();
+            $secondtransitionto = array();
+            $states = $P->get_states();
+            foreach ($states as $state) {
+                foreach ($this->adjacencymatrix[$state] as $transit) {
+                    $firsttransitionto[] = $transit->to;
+                    // TODO - convert ranges.
+                }
+            }
+            $states = $Q->get_states();
+            foreach ($states as $state) {
+                foreach ($another->adjacencymatrix[$state] as $transit) {
+                    $firsttransitionto[] = $transit->to;
+                    // TODO - convert ranges.
+                }
+            }
+            // Creates pairs of groups.
+            $allend = true;
+            while($allend == false) {
+                // TODO - Search next pair.
+                $p = new qtype_preg_fa_group($this);
+                $q = new qtype_preg_fa_group($another); 
+                // Check pair.
+                $ismet = false;
+                /* TODO
+                for ($i = 0; $i < count($stack) - 1; $i++) {
+                    if ($p->cmpgroup($stack[$i]) && $q->cmpgroup($stack[$i + 1])) {
+                        $ismet = true;
+                    }
+                }*/
+                if ($ismet == true) {
+                    if ($p->is_empty() != $q->is_empty()) {
+                        $error = $p->way_to_string($q);
+                        if ($p->is_empty()) {
+                            $error .= ' Only first automata has transition.';
+                        }
+                        else {
+                            $error .= ' Only second automata has transition.';
+                        }
+                        $differences[] = $error;
+                        $isequiv = false;
+                    }
+                    else if ($p->has_end_states() != $q->has_end_states()) {
+                        $error = $p->way_to_string($q);
+                        if ($p->has_end_states()) {
+                            $error .= ' Only first automata has endstates.';
+                        }
+                        else {
+                            $error .= ' Only second automata has endstates.';
+                        }
+                        $differences[] = $error;
+                        $isequiv = false;
+                    }
+                    if ((count($differences) == 0) && $isequiv == true) {
+                        // Append pair of groups in fifo and stack of groups
+                        $fifo[] = $P;
+                        $fifo[] = $Q;
+                        $stack[0][] = $P;
+                        $stack[1][] = $Q;
+                    }
+                }
+            }
     }
 
     /**
