@@ -31,22 +31,174 @@ require_once($CFG->dirroot . '/question/type/poasquestion/poasquestion_string.ph
 require_once($CFG->dirroot . '/question/type/preg/preg_unicode.php');
 
 /**
+ * Represents a node or a lexem position in 2 ways: "absolute" (considering the whole string)
+ * and "relative" (considering lines and columns).
+ */
+class qtype_preg_position {
+    /** First index of something (absolute positioning). */
+    public $indfirst = -1;
+    /** Last index of something (absolute positioning). */
+    public $indlast = -1;
+    /** Index of the line where something begins. */
+    public $linefirst = -1;
+    /** Index of the line where something ends. */
+    public $linelast = -1;
+    /** Index of the first character on the first line. */
+    public $colfirst = -1;
+    /** Index of the last character on the last line. */
+    public $collast = -1;
+
+    public function __construct($indfirst = -1, $indlast = -1, $linefirst = -1, $linelast = -1, $colfirst = -1, $collast = -1) {
+        $this->indfirst = $indfirst;
+        $this->indlast = $indlast;
+        $this->linefirst = $linefirst;
+        $this->linelast = $linelast;
+        $this->colfirst = $colfirst;
+        $this->collast = $collast;
+    }
+
+    public function compose($with) {
+        return new qtype_preg_position($this->indfirst, $with->indlast,
+                                       $this->linefirst, $with->linelast,
+                                       $this->colfirst, $with->collast);
+    }
+
+    public function add_chars_left($count) {
+        return new qtype_preg_position($this->indfirst + $count, $this->indlast,
+                                       $this->linefirst, $this->linelast,
+                                       $this->colfirst + $count, $this->collast);
+    }
+
+    public function add_chars_right($count) {
+        return new qtype_preg_position($this->indfirst, $this->indlast + $count,
+                                       $this->linefirst, $this->linelast,
+                                       $this->colfirst, $this->collast + $count);
+    }
+}
+
+/**
  * Representation of nodes and leafs as they were typed in the regex.
  */
 class qtype_preg_userinscription {
-    /** General case, contains the same string as typed by user. */
-    const TYPE_GENERAL = 'userinscription_general';
-    /** Flag that needs an additional description that must be stored in the lang file (unicode properties names etc). */
-    const TYPE_CHARSET_FLAG = 'userinscription_charset_flag';
-
     /** String with the leaf itself. */
     public $data = '';
-    /** Type of the user inscription. */
-    public $type = null;
+    /** Subype of the flag in case of \w, \d, [:alnum:] or something. See charset_flag constants. */
+    public $isflag = null;
 
-    public function __construct($data = '', $type = self::TYPE_GENERAL) {
+    public function __construct($data = '', $isflag = null) {
         $this->data = $data;
-        $this->type = $type;
+        $this->isflag = $isflag;
+    }
+
+    public function __toString() {
+        return $this->data;
+    }
+
+    /**
+     * Checks if it's a simple character like a, b or й.
+     */
+    public function is_single_character() {
+        return $this->isflag === null &&
+               textlib::strlen($this->data) == 1;
+    }
+
+    public function is_character_range() {
+        if ($this->isflag !== null) {
+            return false;
+        }
+        $mpos = textlib::strpos($this->data, '-');
+        return $mpos !== null && $mpos > 0 && $mpos < textlib::strlen($this->data) - 1;
+    }
+
+    /**
+     * Checks if it's a valid (with a special meaning) escape sequence.
+     */
+    public function is_valid_escape_sequence() {
+        if ($this->is_character_range()) {
+            return false;
+        }
+        $allowed = array('a', 'b', 'c', 'e', 'f', 'n', 'r', 't', 'x',
+                         'd', 'D', 'h', 'H', 's', 'S', 'v', 'V', 'w', 'W',
+                         'p', 'P');
+        return textlib::strlen($this->data) > 1 && $this->data[0] == '\\' &&
+               (in_array($this->data[1], $allowed) || ctype_digit(textlib::substr($this->data, 1)));
+    }
+
+    /**
+     * Checks if it's one of the following characters: \a \b \e \f \n \r \t
+     */
+    public function is_single_escape_sequence_character() {
+        if ($this->isflag !== null || !$this->is_valid_escape_sequence()) {
+            return false;
+        }
+        $allowed = array('a', 'b', 'e', 'f', 'n', 'r', 't');
+        return in_array($this->data[1], $allowed);
+    }
+
+    /**
+     * Checks if it's a character represented as \cx
+     */
+    public function is_single_escape_sequence_character_c() {
+        if ($this->isflag !== null || !$this->is_valid_escape_sequence()) {
+            return false;
+        }
+        return $this->data[1] == 'c';
+    }
+
+    /**
+     * Checks if it's a character represented as \ddd
+     */
+    public function is_single_escape_sequence_character_oct() {
+        if ($this->isflag !== null || !$this->is_valid_escape_sequence()) {
+            return false;
+        }
+        return ctype_digit(textlib::substr($this->data, 1));
+    }
+
+    /**
+     * Checks if it's a character represented as \xhh of \x{hh}
+     */
+    public function is_single_escape_sequence_character_hex() {
+        if ($this->isflag !== null || !$this->is_valid_escape_sequence()) {
+            return false;
+        }
+        return $this->data[1] == 'x';
+    }
+
+    public function is_posix_flag() {
+        return $this->isflag !== null && $this->data[0] == '[';
+    }
+
+    public function is_uprop_flag() {
+        return $this->isflag !== null && $this->data[0] == '\\' && ($this->data[1] == 'p' || $this->data[1] == 'P');
+    }
+
+    public function is_slash_flag() {
+        return $this->isflag !== null && !$this->is_uprop_flag() && $this->data[0] == '\\';
+    }
+
+    public function is_flag_negative() {
+        if (!$this->isflag) {
+            return false;
+        }
+        if ($this->data[0] == '\\') {
+            return ctype_upper($this->data[1]); // Fortunately, this works both for \W and, for example, \PL    TODO: \Z, \A
+        }
+        if ($this->data[0] == '[') {
+            return $this->data[2] == '^';
+        }
+        return false;
+    }
+
+    public function lang_key($usedescription = false) {
+        if ($this->isflag === null || !$usedescription) {
+            return $this->isflag;
+        }
+        $result = 'description_charflag_' . $this->isflag;
+        if ($this->is_flag_negative()) {
+            $result .= '_neg';
+        }
+        return $result;
     }
 }
 
@@ -54,32 +206,17 @@ class qtype_preg_userinscription {
  * Class for plain lexems (not complete nodes), they contain position information too.
  */
 class qtype_preg_lexem {
-    /** Subtype of the lexem. */
-    public $subtype;
-    /** Indexes of first and last characters of the lexem. */
-    public $indfirst = -1;
-    public $indlast = -1;
+    /** An instance of qtype_preg_position. */
+    public $position = null;
     /** An instance of qtype_preg_userinscription. */
     public $userinscription = null;
 
-    public function __construct($subtype, $indfirst, $indlast, $userinscription) {
-        $this->subtype = $subtype;
-        $this->indfirst = $indfirst;
-        $this->indlast = $indlast;
+    /**
+     * Sets position and userinscription for the node.
+     */
+    public function set_user_info($position, $userinscription = array()) {
+        $this->position = $position;
         $this->userinscription = $userinscription;
-    }
-}
-
-/**
- * Class for plain subpattern lexems.
- */
-class qtype_preg_lexem_subpatt extends qtype_preg_lexem {
-    /** Number of the subpattern. */
-    public $number;
-
-    public function __construct($subtype, $indfirst, $indlast, $userinscription, $number) {
-        parent::__construct($subtype, $indfirst, $indlast, $userinscription);
-        $this->number = $number;
     }
 }
 
@@ -89,19 +226,19 @@ class qtype_preg_lexem_subpatt extends qtype_preg_lexem {
 interface qtype_preg_matcher_state {
 
     /**
-     * Returns index of the first character matched for the given subpattern.
+     * Returns index of the first character matched for the given subexpression.
      */
-    public function index_first($subpattern = 0);
+    public function index_first($subexpression = 0);
 
     /**
-     * Returns the length of the given subpattern.
+     * Returns the length of the given subexpression.
      */
-    public function length($subpattern = 0);
+    public function length($subexpression = 0);
 
     /**
-     * Returns whether the given subpattern is captured.
+     * Returns whether the given subexpression is captured.
      */
-    public function is_subpattern_captured($subpattern);
+    public function is_subexpr_captured($subexpression);
 }
 
 /**
@@ -109,15 +246,13 @@ interface qtype_preg_matcher_state {
  */
 abstract class qtype_preg_node {
 
-    /** Abstract node class, not representing real things. */
-    const TYPE_ABSTRACT = 'node_abstract';
     /** A character or a character set. */
     const TYPE_LEAF_CHARSET = 'leaf_charset';
     /** Meta-character or escape sequence matching with a set of characters that couldn't be enumerated. */
     const TYPE_LEAF_META = 'leaf_meta';
     /** Simple assert: ^ $ or escape-sequence. */
     const TYPE_LEAF_ASSERT = 'leaf_assert';
-    /** Back reference to subpattern. */
+    /** Back reference to a subexpression. */
     const TYPE_LEAF_BACKREF = 'leaf_backref';
     /** Recursive match. */
     const TYPE_LEAF_RECURSION = 'leaf_recursion';
@@ -131,14 +266,14 @@ abstract class qtype_preg_node {
     const TYPE_NODE_INFINITE_QUANT = 'node_infinite_quant';
     /** Concatenation. */
     const TYPE_NODE_CONCAT = 'node_concat';
-    /** Alternative. */
+    /** Alternation. */
     const TYPE_NODE_ALT = 'node_alt';
     /** Assert with expression within. */
     const TYPE_NODE_ASSERT = 'node_assert';
-    /** Subpattern. */
-    const TYPE_NODE_SUBPATT = 'node_subpatt';
-    /** Conditional subpattern. */
-    const TYPE_NODE_COND_SUBPATT = 'node_cond_subpatt';
+    /** Subexpression. */
+    const TYPE_NODE_SUBEXPR = 'node_subexpr';
+    /** Conditional subexpression. */
+    const TYPE_NODE_COND_SUBEXPR = 'node_cond_subexpr';
     /** Error node. */
     const TYPE_NODE_ERROR = 'node_error';
 
@@ -146,51 +281,152 @@ abstract class qtype_preg_node {
     public $type;
     /** Subtype, defined by a child class. */
     public $subtype;
-    /** Error data for the subtype. */
-    public $error = null;
-    /** Indexes of first and last characters of the node in the regex. */
-    public $indfirst = -1;
-    public $indlast = -1;
+    /** Errors found for this particular node. */
+    public $errors = array();
+    /** An instance of qtype_preg_position. */
+    public $position = null;
     /** An instance of qtype_preg_userinscription. */
     public $userinscription = null;
     /** Identifier of this node. */
     public $id = -1;
+    /** Subpattern number. */
+    public $subpattern = -1;
+    /** Some calculable values needed for nfa/dfa construction. */
+    public $nullable = null;
+    public $firstpos = null;
+    public $lastpos = null;
 
     public function __construct() {
-        $this->type = self::TYPE_ABSTRACT;
+
+    }
+
+    public function __clone() {
+        if ($this->position !== null) {
+            $this->position = clone $this->position;
+        }
     }
 
     /**
-     * Sets indexes and userinscription for the node.
+     * Is this node a subpattern? According to Fowler, a subpattern
+     * is a leaf, or a subexpression, or a quantifier.
      */
-    public function set_user_info($indfirst, $indlast, $userinscription = null) {
-        $this->indfirst = $indfirst;
-        $this->indlast = $indlast;
+    abstract public function is_subpattern();
+
+    /**
+     * Calculates nullable, firstpos, lastpos and followpos for this node.
+     * @param followpos array to store the followpos map.
+     */
+    abstract public function calculate_nflf(&$followpos);
+
+    /**
+     * Finds the nearest suitable subtree by given indexes in the regex string. If the node is N-ary,
+     * expands it to be binary for better precision, thus AST is modified. All passed indexes are updated
+     * to the indexes of the found subtree.
+     */
+    public function node_by_regex_fragment($indexfirst, $indexlast, &$idcounter) {
+        if ($indexfirst - $indexlast == 1) {
+            // Special case: fictive leaves.
+            $current = array($this);
+            while (count($current) > 0) {
+                $tmp = array_pop($current);
+                if ($tmp->position->indfirst == $indexfirst && $tmp->position->indlast == $indexlast) {
+                    return $tmp;
+                }
+                if (is_a($tmp, 'qtype_preg_operator')) {
+                    $current = array_merge($current, $tmp->operands);
+                }
+            }
+            return null;
+        }
+
+        $result = $this;
+        $found = is_a($result, 'qtype_preg_leaf');
+
+        // Go down the tree.
+        while (!$found) {
+            $replaced = false;
+            foreach ($result->operands as $operand) {
+                $better_than_result = ($operand->position->indfirst >= $result->position->indfirst) && ($operand->position->indlast <= $result->position->indlast);
+
+                $suits_needed = ($operand->position->indfirst <= $indexfirst) && ($operand->position->indlast >= $indexlast);
+
+                if ($better_than_result && $suits_needed) {
+                    $result = $operand;
+                    $replaced = true;
+                }
+            }
+            $found = !$replaced || is_a($result, 'qtype_preg_leaf');
+        }
+
+        $found = ($result->position->indfirst <= $indexfirst) && ($result->position->indlast >= $indexlast);
+
+        if (!$found) {
+            return null;
+        }
+
+        // Expand N-ary nodes for better precision.
+        if (is_a($result, 'qtype_preg_operator')) {
+            $count = count($result->operands);
+            $from = 0;
+            $to = $count - 1;
+
+            for ($i = 0; $i < $count; $i++) {
+                $operand = $result->operands[$i];
+                if ($operand->position->indfirst <= $indexfirst) {
+                    $from = $i;
+                }
+                $operand = $result->operands[$count - $i - 1];
+                if ($operand->position->indlast >= $indexlast) {
+                    $to = $count - $i - 1;
+                }
+            }
+            $result->expand($from, $to, $idcounter);
+
+            // Update the result again.
+            foreach ($result->operands as $operand) {
+                $better_than_result = ($operand->position->indfirst >= $result->position->indfirst) && ($operand->position->indlast <= $result->position->indlast);
+                $suits_needed = ($operand->position->indfirst <= $indexfirst) && ($operand->position->indlast >= $indexlast);
+                if ($better_than_result && $suits_needed) {
+                    $result = $operand;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Expands the subtrees of operands at the given indexes.
+     */
+    public function expand($from, $to, &$idcounter, $expandsubtree = false) {
+    }
+
+    /**
+     * Expands the subtrees of all operands.
+     */
+    public function expand_all(&$idcounter, $expandsubtree = false) {
+    }
+
+    /**
+     * Sets position and userinscription for the node.
+     */
+    public function set_user_info($position, $userinscription = array()) {
+        $this->position = $position;
         $this->userinscription = $userinscription;
     }
 
     /**
-     * Return class name without 'qtype_preg_' prefix. Interface string for the node name should be exactly
-     * the same (and start from an upper-case character) if class not overloading ui_nodename method.
+     * Returns the key for this node in the lang file.
      */
-    public function name() {
-        return $this->type;
+    public function lang_key($usedescription = false) {
+        return $usedescription ? 'description_' . $this->subtype : $this->subtype;
     }
-
-    /**
-     * Returns the dot script corresponding to this node.
-     * @param styleprovider an object prividing styles for different node types.
-     * @param isroot if true, adds the "digraph {\n" to the start and "}" to the end.
-     * @return mixed the dot script if this is the root, array(dot script, node styles) otherwise.
-     */
-    abstract public function dot_script($styleprovider, $isroot = true);
-
 
     /**
      * May be overloaded by childs to change name using data from $this->pregnode.
      */
     public function ui_nodename() {
-        return get_string($this->name(), 'qtype_preg');
+        return get_string($this->type, 'qtype_preg');
     }
 }
 
@@ -199,31 +435,43 @@ abstract class qtype_preg_node {
  */
 abstract class qtype_preg_leaf extends qtype_preg_node {
 
+    /** Constants that can be returned from next_character for special cases. */
+    const NEXT_CHAR_CANNOT_GENERATE = 0x01;
+    const NEXT_CHAR_NOT_NEEDED      = 0x02;
+    const NEXT_CHAR_END_HERE        = 0x04;
+
     /** Is matching case insensitive? */
-    public $caseinsensitive = false;
+    public $caseless = false;
     /** Is this leaf negative? */
     public $negative = false;
     /** Assertions merged into this node (qtype_preg_leaf_assert objects). */
-    public $mergedassertions = array();
+    public $mergedassertions = array();//TODO two fields: assertionsbefore and assertionsafter.
 
     public function __clone() {
-        // When clonning a leaf we also want the merged assertions to be cloned
+        parent::__clone();
+        // When clonning a leaf we also want the merged assertions to be cloned.
         foreach ($this->mergedassertions as $i => $mergedassertion) {
             $this->mergedassertions[$i] = clone $mergedassertion;
         }
     }
 
-    public function dot_script($styleprovider, $isroot = true) {
-        // Calculate the node name, style and the result.
-        $nodename = $this->id;
-        $style = $nodename . $styleprovider->get_style($this) . ';';
-        $dotscript = $nodename . ';';
-        if ($isroot) {
-            $dotscript = $styleprovider->get_dot_head() . $style . $dotscript . $styleprovider->get_dot_tail();
-            return $dotscript;
-        } else {
-            return array($dotscript, $style);
+    public function is_subpattern() {
+        return true;    // Any leaf is a subpattern.
+    }
+
+    public function calculate_nflf(&$followpos) {
+        // The following is true for almost all leafs, except emptiness.
+        $this->nullable = false;
+        $this->firstpos = array($this->id);
+        $this->lastpos = array($this->id);
+    }
+
+    public function lang_key($usedescription = false) {
+        $result = parent::lang_key($usedescription);
+        if ($usedescription && $this->negative) {
+            $result .= '_neg';
         }
+        return $result;
     }
 
     /**
@@ -247,7 +495,7 @@ abstract class qtype_preg_leaf extends qtype_preg_node {
     public function match($str, $pos, &$length, $matcherstateobj = null) {
         $result = true;
         // Check merged assertions first.
-        foreach($this->mergedassertions as $assert) {
+        foreach ($this->mergedassertions as $assert) {
             $result = $result && $assert->match($str, $pos, $length, $matcherstateobj);
         }
         // Now check this leaf.
@@ -282,6 +530,93 @@ abstract class qtype_preg_leaf extends qtype_preg_node {
 }
 
 /**
+ * Defines operator nodes.
+ */
+abstract class qtype_preg_operator extends qtype_preg_node {
+
+    /** An array of operands. */
+    public $operands = array();
+
+    public function __clone() {
+        parent::__clone();
+        // When clonning an operator we also want its subtree to be cloned.
+        foreach ($this->operands as $i => $operand) {
+            $this->operands[$i] = clone $operand;
+        }
+    }
+
+    public function calculate_nflf(&$followpos) {
+        // Calculate nflf for all operands.
+        foreach ($this->operands as $operand) {
+            $operand->calculate_nflf($followpos);
+        }
+        if (count($this->operands) > 0) {
+            $this->nullable = $this->operands[0]->nullable;
+            $this->firstpos = $this->operands[0]->firstpos;
+            $this->lastpos = $this->operands[0]->lastpos;
+        } else {
+            $this->nullable =  false;
+            $this->firstpos = array();
+            $this->lastpos = array();
+        }
+    }
+
+    public function expand($from, $to, &$idcounter, $expandsubtree = false) {
+        if ($expandsubtree) {
+            for ($i = $from; $i <= $to; $i++) {
+                $this->operands[$i]->expand_all($idcounter, $expandsubtree);
+            }
+        }
+
+        if (count($this->operands) <= 2) {
+            return;
+        }
+
+        $operands = array();
+
+        // Copy 'left' operands.
+        for ($i = 0; $i < $from; $i++) {
+            $operands[] = $this->operands[$i];
+        }
+
+        // Form the new subtree and add it as operand.
+        $newnode = clone $this; // Will go down the tree.
+        $newnode->id = ++$idcounter;
+        $newnode->operands = array();
+        for ($i = $from; $i <= $to; $i++) {
+            $newnode->operands[] = $this->operands[$i];
+        }
+        $operands[] = $newnode;
+
+        // Copy 'right' operands.
+        for ($i = $to + 1; $i < count($this->operands); $i++) {
+            $operands[] = $this->operands[$i];
+        }
+
+        // Update operands of this node.
+        $this->operands = $operands;
+        if ($expandsubtree) {
+        	$newnode->expand(0, count($newnode->operands) - 2, $idcounter);
+        }
+
+        // Fix the new node position.
+        $left = $newnode->operands[0];
+        $right = $newnode->operands[count($newnode->operands) - 1];
+        $newnode->position = new qtype_preg_position($left->position->indfirst, $right->position->indlast,
+                                                     $left->position->linefirst, $right->position->linelast,
+                                                     $left->position->colfirst, $right->position->collast);
+
+        if (count($operands) == 1) {
+            $this->operands = $newnode->operands;
+        }
+    }
+
+    public function expand_all(&$idcounter, $expandsubtree = false) {
+        $this->expand(0, count($this->operands) - 1, $idcounter, $expandsubtree);
+    }
+}
+
+/**
  * Represents a character or a charcter set.
  */
 class qtype_preg_leaf_charset extends qtype_preg_leaf {
@@ -312,16 +647,54 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
         }
     }
 
-    protected function calc_ranges() {
-        $this->israngecalculated = true;
-        die('implement range calulate before use it!');
+    public function is_single_character() {
+        return count($this->flags) == 1 &&
+               $this->flags[0][0]->type == qtype_preg_charset_flag::TYPE_SET &&
+               $this->flags[0][0]->data->length() == 1;
+    }
+
+    public function is_single_printable_character() {
+        if (!$this->is_single_character()) {
+            return false;
+        }
+        return !qtype_preg_unicode::is_in_range($this->flags[0][0]->data[0], qtype_preg_unicode::Z_ranges()) &&
+               !qtype_preg_unicode::is_in_range($this->flags[0][0]->data[0], qtype_preg_unicode::C_ranges());
+    }
+
+    public function is_single_non_printable_character() {
+        if (!$this->is_single_character()) {
+            return false;
+        }
+        return qtype_preg_unicode::is_in_range($this->flags[0][0]->data[0], qtype_preg_unicode::Z_ranges()) ||
+               qtype_preg_unicode::is_in_range($this->flags[0][0]->data[0], qtype_preg_unicode::C_ranges());
+    }
+
+    /**
+     * Checks if it's a single \a \b \e \f \r \t
+     */
+    public function is_single_escape_sequence_character() {
+        if (!$this->is_single_character()) {
+            return false;
+        }
+        return in_array($this->userinscription[0]->data, qtype_preg_lexer::char_escape_sequences_inside_charset());
+    }
+
+    public function is_single_flag() {
+        return count($this->flags) == 1 &&
+               $this->flags[0][0]->type == qtype_preg_charset_flag::TYPE_FLAG &&
+               $this->flags[0][0]->data != qtype_preg_charset_flag::META_DOT;
+    }
+
+    public function is_single_dot() {
+        return count($this->flags) == 1 &&
+               $this->flags[0][0]->type == qtype_preg_charset_flag::TYPE_FLAG &&
+               $this->flags[0][0]->data == qtype_preg_charset_flag::META_DOT;
     }
 
     protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
         if ($pos < 0 || $pos >= $str->length()) {
             return false;
         }
-        $result = false;
         if ($this->flags === null) {
             return false;
         }
@@ -330,7 +703,7 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
             // Get intersection of all current flags.
             $result = !empty($flags);
             foreach ($flags as $flag) {
-                $result = $result && $flag->match($str, $pos, !$this->caseinsensitive);
+                $result = $result && $flag->match($str, $pos, $this->caseless);
                 if (!$result) {
                     break;
                 }
@@ -347,11 +720,15 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
     }
 
     public function next_character($str, $pos, $length = 0, $matcherstateobj = null) { // TODO may be rename to character?
+        $desired_chars = array(array(0x21, 0x007F));
+        $desired_whitespaces = array(array(0x20, 0x20));
+
         foreach ($this->flags as $flags) {
             // Get intersection of all current flags.
-            $ranges = array(array(0, qtype_preg_unicode::max_possible_code()));
+            $ranges = qtype_preg_unicode::dot_ranges();
+
             foreach ($flags as $flag) {
-                if ($flag->type === qtype_preg_charset_flag::SET) {
+                if ($flag->type === qtype_preg_charset_flag::TYPE_SET) {
                     $currange = qtype_preg_unicode::get_ranges_from_charset($flag->data);
                 } else {
                     $currange = call_user_func('qtype_preg_unicode::' . $flag->data . '_ranges');
@@ -364,15 +741,33 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
             if ($this->negative) {
                 $ranges = qtype_preg_unicode::negate_ranges($ranges);
             }
-            // Check all the returned ranges.
-            foreach ($ranges as $range) {
-                for ($i = $range[0]; $i <= $range[1]; $i++) {
-                    $c = new qtype_poasquestion_string(qtype_poasquestion_string::code2utf8($i));
-                    //if ($this->match($c, 0, $l)) {
-                    return $c;
-                    //}
-                }
+
+            $desired = qtype_preg_unicode::intersect_ranges($ranges, $desired_chars);
+            if (!empty($desired)) {
+                $code = $desired[0][0];
+                return new qtype_poasquestion_string(qtype_preg_unicode::code2utf8($code));
             }
+
+            $desired = qtype_preg_unicode::intersect_ranges($ranges, $desired_whitespaces);
+            if (!empty($desired)) {
+                $code = $desired[0][0];
+                return new qtype_poasquestion_string(qtype_preg_unicode::code2utf8($code));
+            }
+
+            if (!empty($ranges)) {
+                $code = $ranges[0][0];
+                return new qtype_poasquestion_string(qtype_preg_unicode::code2utf8($code));
+            }
+
+            // Check all the returned ranges.
+            /*foreach ($ranges as $range) {
+                for ($i = $range[0]; $i <= $range[1]; $i++) {
+                    $c = new qtype_poasquestion_string(qtype_preg_unicode::code2utf8($i));
+                    // if ($this->match($c, 0, $l)) {
+                    return $c;
+                    // }
+                }
+            }*/
         }
         return new qtype_poasquestion_string('');
     }
@@ -380,7 +775,7 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
     /**
      * Check if other charset is included in this. That means that any character matching other also matches this.
      * @param other charset to check.
-     * @return true if included, false otherwise
+     * @return true if included, false otherwise.
      */
     public function is_include(qtype_preg_leaf_charset $other) {
         /*$result = true;
@@ -389,12 +784,12 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
             $result = $result && (!$this->match($c, 0, $l) && $other->match($c, 0, $l));
         }
         return $result || $other===$this;*/
-        //getting ranges of this charset
+        // Getting ranges of this charset.
         foreach ($this->flags as $flags) {
             foreach ($flags as $flag) {
                 // Get intersection of all current flags.
                 $range = array(array('negative' => false, 0 => 0, 1 => qtype_preg_unicode::max_possible_code()));
-                if ($flag->type === qtype_preg_charset_flag::SET) {
+                if ($flag->type === qtype_preg_charset_flag::TYPE_SET) {
                     $currange = qtype_preg_unicode::get_ranges_from_charset($flag->data);
                 } else {
                     $currange = call_user_func('qtype_preg_unicode::' . $flag->data . '_ranges');
@@ -404,18 +799,19 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
                 }
                 $ranges = qtype_preg_unicode::intersect_ranges($range, $currange);
                 if ($this->negative) {
-                    foreach ($ranges as &$tmp)
+                    foreach ($ranges as &$tmp) {
                         $tmp['negative'] = true;
+                    }
                     $ranges = qtype_preg_unicode::intersect_ranges($ranges, array('negative' => false, 0 => 0, 1 => qtype_preg_unicode::max_possible_code()));
                 }
             }
         }
-        //getting ranges of other charset
+        // Getting ranges of other charset.
         foreach ($other->flags as $flags) {
             foreach ($flags as $flag) {
                 // Get intersection of all current flags.
                 $range = array(array('negative' => false, 0 => 0, 1 => qtype_preg_unicode::max_possible_code()));
-                if ($flag->type === qtype_preg_charset_flag::SET) {
+                if ($flag->type === qtype_preg_charset_flag::TYPE_SET) {
                     $currange = qtype_preg_unicode::get_ranges_from_charset($flag->data);
                 } else {
                     $currange = call_user_func('qtype_preg_unicode::' . $flag->data . '_ranges');
@@ -425,13 +821,14 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
                 }
                 $otherranges = qtype_preg_unicode::intersect_ranges($range, $currange);
                 if ($other->negative) {
-                    foreach ($otherranges as &$tmp)
+                    foreach ($otherranges as &$tmp) {
                         $tmp['negative'] = true;
+                    }
                     $otherranges = qtype_preg_unicode::intersect_ranges($otherranges, array('negative' => false, 0 => 0, 1 => qtype_preg_unicode::max_possible_code()));
                 }
             }
         }
-        //comparing ranges of this and other charsets
+        // Comparing ranges of this and other charsets.
         if (is_array($ranges)) {
               $included = true;
         } else {
@@ -445,15 +842,15 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
         }
         $ranges = qtype_preg_unicode::intersect_ranges(array($ranges, $otherranges));*/
         for (reset($ranges), reset($otherranges); $included && current($ranges)!==false; next($ranges), next($otherranges)) {
-               if (current($ranges)!=current($otherranges)) {
-                    $included = false;
-                    /*while (next($ranges)!==false && current($ranges)!=current($otherranges)) {
-                         next($ranges);
-                    }
-                    if (current($ranges)!==false) {
-                    $included = true;
-                    }*/
-               }
+            if (current($ranges)!=current($otherranges)) {
+                $included = false;
+                /*while (next($ranges)!==false && current($ranges)!=current($otherranges)) {
+                    next($ranges);
+                }
+                if (current($ranges)!==false) {
+                $included = true;
+                }*/
+            }
         }
         return $included;
     }
@@ -470,7 +867,7 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
             foreach ($flags as $flag) {
                 // Get intersection of all current flags.
                 $range = array(array('negative' => false, 0 => 0, 1 => qtype_preg_unicode::max_possible_code()));
-                if ($flag->type === qtype_preg_charset_flag::SET) {
+                if ($flag->type === qtype_preg_charset_flag::TYPE_SET) {
                     $currange = qtype_preg_unicode::get_ranges_from_charset($flag->data);
                 } else {
                     $currange = call_user_func('qtype_preg_unicode::' . $flag->data . '_ranges');
@@ -480,18 +877,19 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
                 }
                 $ranges = qtype_preg_unicode::intersect_ranges($range, $currange);
                 if ($this->negative) {
-                    foreach ($ranges as &$tmp)
+                    foreach ($ranges as &$tmp) {
                         $tmp['negative'] = true;
+                    }
                     $ranges = qtype_preg_unicode::intersect_ranges($ranges, array('negative' => false, 0 => 0, 1 => qtype_preg_unicode::max_possible_code()));
                 }
             }
         }
-        //getting ranges of other charset
+        // Getting ranges of other charset.
         foreach ($other->flags as $flags) {
             foreach ($flags as $flag) {
                 // Get intersection of all current flags.
                 $range = array(array('negative' => false, 0 => 0, 1 => qtype_preg_unicode::max_possible_code()));
-                if ($flag->type === qtype_preg_charset_flag::SET) {
+                if ($flag->type === qtype_preg_charset_flag::TYPE_SET) {
                     $currange = qtype_preg_unicode::get_ranges_from_charset($flag->data);
                 } else {
                     $currange = call_user_func('qtype_preg_unicode::' . $flag->data . '_ranges');
@@ -501,13 +899,14 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
                 }
                 $otherranges = qtype_preg_unicode::intersect_ranges($range, $currange);
                 if ($other->negative) {
-                    foreach ($otherranges as &$tmp)
+                    foreach ($otherranges as &$tmp) {
                         $tmp['negative'] = true;
+                    }
                     $otherranges = qtype_preg_unicode::intersect_ranges($otherranges, array('negative' => false, 0 => 0, 1 => qtype_preg_unicode::max_possible_code()));
                 }
             }
         }
-        //comparing ranges of this and other charsets
+        // Comparing ranges of this and other charsets.
         if (is_array($ranges)) {
               $included = false;
         } else {
@@ -521,15 +920,15 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
         }
         $ranges = qtype_preg_unicode::intersect_ranges(array($ranges, $otherranges));*/
         for (reset($ranges), reset($otherranges); $included && current($ranges)!==false; next($ranges), next($otherranges)) {
-               if (current($ranges)==current($otherranges)) {
-                    $included = true;
-                    /*while (next($ranges)!==false && current($ranges)!=current($otherranges)) {
-                         next($ranges);
-                    }
-                    if (current($ranges)!==false) {
-                    $included = true;
-                    }*/
-               }
+            if (current($ranges)==current($otherranges)) {
+                $included = true;
+                /*while (next($ranges)!==false && current($ranges)!=current($otherranges)) {
+                    next($ranges);
+                }
+                if (current($ranges)!==false) {
+                $included = true;
+                }*/
+            }
         }
         return $included;
     }
@@ -550,14 +949,6 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
             }
         }
         return $result;
-    }
-
-    public function add_flag_dis(qtype_preg_charset_flag $flag) {
-        echo 'implement add_flag before use!';
-    }
-
-    public function add_flag_con(qtype_preg_charset_flag $flag) {
-        echo 'implement add_flag before use!';
     }
 
     /**
@@ -602,28 +993,34 @@ class qtype_preg_leaf_charset extends qtype_preg_leaf {
 class qtype_preg_charset_flag {
 
     // Charset types.
-    const SET                    = 'enumerable_characters';
-    const FLAG                   = 'functionally_calculated_characters';
-    const UPROP                  = 'unicode_property';
-    const CIRCUMFLEX             = 'circumflex';
-    const DOLLAR                 = 'dollar';
+    const TYPE_SET               = 'enumerable_characters';
+    const TYPE_FLAG              = 'functionally_calculated_characters';
 
-    // Flag types.
-    const DIGIT                  = 'digit';      // \d AND [:digit:]
-    const XDIGIT                 = 'xdigit';     // [:xdigit:]
-    const SPACE                  = 'space';      // \s AND [:space:]
-    const WORD                   = 'word';       // \w AND [:word:]
-    const ALNUM                  = 'alnum';      // [:alnum:]
-    const ALPHA                  = 'alpha';      // [:alpha:]
-    const ASCII                  = 'ascii';      // [:ascii:]
-    const CNTRL                  = 'cntrl';      // [:ctrl:]
-    const GRAPH                  = 'graph';      // [:graph:]
-    const LOWER                  = 'lower';      // [:lower:]
-    const UPPER                  = 'upper';      // [:upper:]
-    const PRIN                   = 'print';      // [:print:] PRIN, because PRINT is php keyword
-    const PUNCT                  = 'punct';      // [:punct:]
-    const HSPACE                 = 'hspace';     // \h
-    const VSPACE                 = 'vspace';     // \v
+    const META_DOT               = 'dot';
+
+    // Escape sequences.
+    const SLASH_D                = 'slashd';
+    const SLASH_H                = 'slashh';
+    const SLASH_S                = 'slashs';
+    const SLASH_V                = 'slashv';
+    const SLASH_W                = 'slashw';
+
+    // POSIX classes.
+    const POSIX_ALNUM            = 'alnum';      // [:alnum:]
+    const POSIX_ALPHA            = 'alpha';      // [:alpha:]
+    const POSIX_ASCII            = 'ascii';      // [:ascii:]
+    const POSIX_BLANK            = 'blank';      // [:blank:]
+    const POSIX_CNTRL            = 'cntrl';      // [:cntrl:]
+    const POSIX_DIGIT            = 'digit';      // [:digit:]
+    const POSIX_GRAPH            = 'graph';      // [:graph:]
+    const POSIX_LOWER            = 'lower';      // [:lower:]
+    const POSIX_PRINT            = 'print';      // [:print:]
+    const POSIX_PUNCT            = 'punct';      // [:punct:]
+    const POSIX_SPACE            = 'space';      // [:space:]
+    const POSIX_UPPER            = 'upper';      // [:upper:]
+    const POSIX_WORD             = 'word';       // [:word:]
+    const POSIX_XDIGIT           = 'xdigit';     // [:xdigit:]
+
     const UPROPCC                = 'Cc';         // Control
     const UPROPCF                = 'Cf';         // Format
     const UPROPCN                = 'Cn';         // Unassigned
@@ -760,10 +1157,11 @@ class qtype_preg_charset_flag {
 
     /** Is this flag negative? */
     public $negative = false;
-    /** Type of this flag, can be either TYPE_SET or TYPE_FLAG or TYPE_UPROP or TYPE_CIRCUMFLEX or TYPE_DOLLAR. */
+    /** Type of this flag, can be either TYPE_SET or TYPE_FLAG. */
     public $type;
-    /** Characters, flag or unicode property if this is a TYPE_SET, TYPE_FLAG or TYPE_UPROP correspondingly. */
+    /** Characters, flag or unicode property if this is a TYPE_SET, TYPE_FLAG correspondingly. */
     public $data;
+
 
     public function __clone() {
         if (is_object($this->data)) {
@@ -781,39 +1179,30 @@ class qtype_preg_charset_flag {
         $this->data = $data;
     }
 
-    public function is_null_length() {
-        return $this->type === self::CIRCUMFLEX || $this->type === self::DOLLAR;
-    }
-
-    public function match($str, $pos, $cs) {
+    public function match($str, $pos, $caseless) {
         if ($pos < 0 || $pos >= $str->length()) {
             return false;    // String index out of borders.
         }
 
         $char = $str[$pos];
-        if (!$cs) {
+        if ($caseless) {
             $charlower = qtype_poasquestion_string::strtolower($char);
             $charupper = qtype_poasquestion_string::strtoupper($char);
         }
 
         switch ($this->type) {
-            case self::CIRCUMFLEX:
-                return (($pos === 0) xor $this->negative);
-            case self::DOLLAR:
-                return (($pos === $str->length() - 1) xor $this->negative);
-            case self::SET:
+            case self::TYPE_SET:
                 $ranges = qtype_preg_unicode::get_ranges_from_charset($this->data);
                 break;
-            case self::FLAG:
-            case self::UPROP:
+            case self::TYPE_FLAG:
                 $ranges = call_user_func('qtype_preg_unicode::' . $this->data . '_ranges');
                 break;
         }
 
-        if ($cs) {
-            $result = qtype_preg_unicode::is_in_range($char, $ranges);
-        } else {
+        if ($caseless) {
             $result = qtype_preg_unicode::is_in_range($charlower, $ranges) || qtype_preg_unicode::is_in_range($charupper, $ranges);
+        } else {
+            $result = qtype_preg_unicode::is_in_range($char, $ranges);
         }
         return ($result xor $this->negative);
     }
@@ -821,23 +1210,14 @@ class qtype_preg_charset_flag {
     public function tohr() {
         $result = '';
         switch ($this->type) {
-        case self::CIRCUMFLEX:
-            $result = '^';
-            break;
-        case self::DOLLAR:
-            $result = '$';
-            break;
-        case self::SET:
-            $result = $this->data;
-            break;
-        case self::FLAG:
-            $result = $this->data;
-            break;
-        case self::UPROP:
-            $result = 'todo';
-            break;
-        default:
-            return '';
+            case self::TYPE_SET:
+                $result = $this->data;
+                break;
+            case self::TYPE_FLAG:
+                $result = $this->data;
+                break;
+            default:
+                return '';
         }
         if ($this->negative) {
             $result = '!' . $result;
@@ -851,9 +1231,9 @@ class qtype_preg_charset_flag {
  */
 class qtype_preg_leaf_meta extends qtype_preg_leaf {
 
-    //Leaf with empty in alternative (something|)
+    // Leaf with empty in alternation (something|).
     const SUBTYPE_EMPTY = 'empty_leaf_meta';
-    //Service subtype - end of regex, but not end of string
+    // Service subtype - end of regex, but not end of string.
     const SUBTYPE_ENDREG = 'endreg_leaf_meta';
 
     public function __construct($subtype = null) {
@@ -861,7 +1241,16 @@ class qtype_preg_leaf_meta extends qtype_preg_leaf {
         $this->subtype = $subtype;
     }
 
-    //TODO - ui_nodename()
+    public function calculate_nflf(&$followpos) {
+        parent::calculate_nflf($followpos);
+        if ($this->subtype == self::SUBTYPE_EMPTY) {
+            $this->nullable = true;
+            $this->firstpos = array();
+            $this->lastpos = array();
+        }
+    }
+
+    // TODO - ui_nodename().
 
     public function consumes($matcherstateobj = null) {
         return 0;
@@ -878,9 +1267,9 @@ class qtype_preg_leaf_meta extends qtype_preg_leaf {
 
     public function tohr() {
         switch ($this->subtype) {
-            case qtype_preg_leaf_meta::SUBTYPE_ENDREG:
+            case self::SUBTYPE_ENDREG:
                 return 'metaENDREG';
-            case qtype_preg_leaf_meta::SUBTYPE_EMPTY:
+            case self::SUBTYPE_EMPTY:
                 return 'metaEPS';
             default:
                 return '';
@@ -889,113 +1278,209 @@ class qtype_preg_leaf_meta extends qtype_preg_leaf {
 }
 
 /**
- * Defines simple assertions.
+ * Base class for simple assertions.
  */
-class qtype_preg_leaf_assert extends qtype_preg_leaf {
+abstract class qtype_preg_leaf_assert extends qtype_preg_leaf {
 
+    /** \b and \B */
+    const SUBTYPE_ESC_B = 'esc_b_leaf_assert';
+    /** \A */
+    const SUBTYPE_ESC_A = 'esc_a_leaf_assert';
+    /** \z and \Z */
+    const SUBTYPE_ESC_Z = 'esc_z_leaf_assert';
+    /** \G */
+    const SUBTYPE_ESC_G = 'esc_g_leaf_assert';
     /** ^ */
     const SUBTYPE_CIRCUMFLEX = 'circumflex_leaf_assert';
     /** $ */
     const SUBTYPE_DOLLAR = 'dollar_leaf_assert';
-    /** \b */
-    const SUBTYPE_ESC_B = 'esc_b_leaf_assert';
-    /** \A */
-    const SUBTYPE_ESC_A = 'esc_a_leaf_assert';
-    /** \z */
-    const SUBTYPE_ESC_Z = 'esc_z_leaf_assert';
-    /** \G */
-    const SUBTYPE_ESC_G = 'esc_g_leaf_assert';
 
-    public function __construct($subtype = null, $negative = false) {
+    public function __construct($negative = false) {
         $this->type = qtype_preg_node::TYPE_LEAF_ASSERT;
-        $this->subtype = $subtype;
         $this->negative = $negative;
+    }
+
+    public function is_start_anchor() {
+        return $this->subtype == self::SUBTYPE_ESC_A || $this->subtype == self::SUBTYPE_CIRCUMFLEX;
+    }
+
+    public function is_end_anchor() {
+        return $this->subtype == self::SUBTYPE_ESC_Z || $this->subtype == self::SUBTYPE_DOLLAR;
     }
 
     public function consumes($matcherstateobj = null) {
         return 0;
     }
+}
 
-    //TODO - ui_nodename()
+/**
+ * Simple assertion \B (negative == true) matches at not a word boundary.
+ * Simple assertion \b (negative == false) matches at a word boundary.
+ */
+class qtype_preg_leaf_assert_esc_b extends qtype_preg_leaf_assert {
+
+    public function __construct($negative = false) {
+        parent::__construct($negative);
+        $this->subtype = self::SUBTYPE_ESC_B;
+    }
+
+    protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
+        $alnumrange = qtype_preg_unicode::alnum_ranges();
+        $ch0 = $str[0];
+        $ch1 = $str[$pos - 1];
+
+        $flag0 = $ch0 == '_' || qtype_preg_unicode::is_in_range($ch0, $alnumrange);
+        $flag1 = $ch1 == '_' || qtype_preg_unicode::is_in_range($ch1, $alnumrange);
+
+        $start = $flag0 && $pos == 0;
+        $end = $flag1 && $pos == $str->length();
+        $wnotw = false;
+        $notww = false;
+
+        if ($pos > 0 && $pos < $str->length()) {
+            $ch2 = $str[$pos];
+            $flag2 = $ch2 == '_' || qtype_preg_unicode::is_in_range($ch2, $alnumrange);
+            $wnotw = $flag1 && !$flag2;
+            $notww = !$flag1 && $flag2;
+        }
+
+        $length = 0;
+        return ($start || $end || $wnotw || $notww) xor $this->negative;
+    }
+
+    public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
+        return '';  // TODO
+    }
+
+    public function tohr() {
+        return $this->negative ? 'assert \B' : 'assert \b';
+    }
+}
+
+/**
+ * Simple assertion \A matches at the very start of the string.
+ */
+class qtype_preg_leaf_assert_esc_a extends qtype_preg_leaf_assert {
+
+    public function __construct($negative = false) {
+        parent::__construct($negative);
+        $this->subtype = self::SUBTYPE_ESC_A;
+    }
+
     protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
         $length = 0;
-        switch ($this->subtype) {
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_A:    // Because there can be only one line is the response.
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_G:    // There are no repetitive matching for now, so \G is equvivalent to \A.
-            case qtype_preg_leaf_assert::SUBTYPE_CIRCUMFLEX:
-                $result = ($pos === 0);
-                break;
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_Z:    // Because there can be only one line is the response.
-            case qtype_preg_leaf_assert::SUBTYPE_DOLLAR:
-                $result = ($pos === $str->length());
-                break;
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_B:
-                $alnumrange = qtype_preg_unicode::alnum_ranges();
-                $start = $pos === 0 && ($str[0] === '_' || qtype_preg_unicode::is_in_range($str[0], $alnumrange));
-                $end = $pos === $str->length() && ($str[$pos - 1] === '_' || qtype_preg_unicode::is_in_range($str[$pos - 1], $alnumrange));
-                $wW = $Ww = false;
-                if ($pos > 0 && $pos < $str->length()) {
-                    $wW = ($str[$pos - 1] === '_' || qtype_preg_unicode::is_in_range($str[$pos - 1], $alnumrange)) && !($str[$pos] === '_' || qtype_preg_unicode::is_in_range($str[$pos], $alnumrange));
-                    $Ww = !($str[$pos - 1] === '_' || qtype_preg_unicode::is_in_range($str[$pos - 1], $alnumrange)) && ($str[$pos] === '_' || qtype_preg_unicode::is_in_range($str[$pos], $alnumrange));
-                }
-                $result = ($start || $end || $wW || $Ww);
-                break;
-            default:
-                $result = false;
-        }
-        if ($this->negative) {
-            $result = !$result;
-        }
-        return $result;
+        return ($pos == 0);
     }
+
     public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
-        switch ($this->subtype) {
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_A:    // Because there can be only one line is the response.
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_G:
-            case qtype_preg_leaf_assert::SUBTYPE_CIRCUMFLEX:
-                if ($this->negative) {
-                    return 'notstringstart';
-                } else {
-                    return 'stringstart';
-                }
-                break;
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_Z:    // Because there can be only one line is the response.
-            case qtype_preg_leaf_assert::SUBTYPE_DOLLAR:
-                if ($this->negative) {
-                    return ' notstringend';
-                } else {
-                    return '';
-                }
-                break;
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_B:
-                if ($this->negative) {
-                    return 'notwordchar';
-                } else {
-                    return 'wordchar';
-                }
-                break;
+        return '';  // TODO
+    }
+
+    public function tohr() {
+        return 'assert \A';
+    }
+}
+
+/**
+ * Simple assertion \Z (negative == true) matches at the end of the string, also matches before the very last newline.
+ * Simple assertion \z (negative == false) matches only at the end of the string.
+ */
+class qtype_preg_leaf_assert_esc_z extends qtype_preg_leaf_assert {
+
+    public function __construct($negative = false) {
+        parent::__construct($negative);
+        $this->subtype = self::SUBTYPE_ESC_Z;
+    }
+
+    protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
+        $length = 0;
+        if ($this->negative) {
+            return ($pos == $str->length()) || ($pos == $str->length() - 1 && $str[$pos] == "\n");
+        } else {
+            return ($pos == $str->length());
         }
     }
+
+    public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
+        return '';  // TODO
+    }
+
     public function tohr() {
-        switch ($this->subtype) {
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_A:    // Because there can be only one line is the response.
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_G:
-            case qtype_preg_leaf_assert::SUBTYPE_CIRCUMFLEX:
-                $type = '^';
-                break;
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_Z:    // Because there can be only one line is the response.
-            case qtype_preg_leaf_assert::SUBTYPE_DOLLAR:
-                $type = '$';
-                break;
-            case qtype_preg_leaf_assert::SUBTYPE_ESC_B:
-                $type = '\\b';
-                break;
-        }
-        if ($this->negative) {
-            return '!assert' . $type;
-        } else {
-            return 'assert' . $type;
-        }
+        return $this->negative ? 'assert \Z' : 'assert \z';
+    }
+}
+
+/**
+ * Simple assertion \G matches at the first matching position in the string.
+ */
+class qtype_preg_leaf_assert_esc_g extends qtype_preg_leaf_assert {
+
+    public function __construct($negative = false) {
+        parent::__construct($negative);
+        $this->subtype = self::SUBTYPE_ESC_G;
+    }
+
+    protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
+        $length = 0;
+        return false; // TODO
+    }
+
+    public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
+        return '';  // TODO
+    }
+
+    public function tohr() {
+        return 'assert \G';
+    }
+}
+
+/**
+ * Simple assertion ^ matches at the very start of the string or after any \n.
+ * Used only in multiline mode.
+ */
+class qtype_preg_leaf_assert_circumflex extends qtype_preg_leaf_assert {
+
+    public function __construct($negative = false) {
+        parent::__construct($negative);
+        $this->subtype = self::SUBTYPE_CIRCUMFLEX;
+    }
+
+    protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
+        $length = 0;
+        return ($pos == 0) || ($str[$pos - 1] == "\n");
+    }
+
+    public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
+        return '';  // TODO
+    }
+
+    public function tohr() {
+        return 'assert ^';
+    }
+}
+
+/**
+ * Simple assertion $ matches at the end of the string and before any \n.
+ * Used only in multiline mode.
+ */
+class qtype_preg_leaf_assert_dollar extends qtype_preg_leaf_assert {
+
+    public function __construct($negative = false) {
+        parent::__construct($negative);
+        $this->subtype = self::SUBTYPE_DOLLAR;
+    }
+
+    protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
+        $length = 0;
+        return ($pos == $str->length()) || ($str[$pos] == "\n");
+    }
+
+    public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
+        return '';  // TODO
+    }
+
+    public function tohr() {
+        return 'assert $';
     }
 }
 
@@ -1003,16 +1488,25 @@ class qtype_preg_leaf_assert extends qtype_preg_leaf {
  * Defines backreferences.
  */
 class qtype_preg_leaf_backref extends qtype_preg_leaf {
-    /** The number of a subpattern to refer to. */
+    /** The number of a subexpression to refer to. */
     public $number;
 
     public function __construct($number = null) {
         $this->type = qtype_preg_node::TYPE_LEAF_BACKREF;
+        $this->subtype = $this->type;
         $this->number = $number;
     }
 
+    public function lang_key($usedescription = false) {
+        $result = parent::lang_key($usedescription);
+        if ($usedescription && is_string($this->number)) {
+            $result .= '_name';
+        }
+        return $result;
+    }
+
     public function consumes($matcherstateobj = null) {
-        if (!$matcherstateobj->is_subpattern_captured($this->number)) {
+        if (!$matcherstateobj->is_subexpr_captured($this->number)) {
             return qtype_preg_matching_results::UNKNOWN_CHARACTERS_LEFT;
         }
         return $matcherstateobj->length($this->number);
@@ -1020,40 +1514,53 @@ class qtype_preg_leaf_backref extends qtype_preg_leaf {
 
     protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
         $length = 0;
-        $subpattlen = $matcherstateobj->length($this->number);
-        $start = $matcherstateobj->index_first($this->number);
-        $end = $start + $subpattlen - 1;
 
-        if (!$matcherstateobj->is_subpattern_captured($this->number) || ($subpattlen > 0 && $pos >= $str->length())) {
+        if (!$matcherstateobj->is_subexpr_captured($this->number)) {
+            // For no match return the result immediately.
             return false;
-        } else if ($subpattlen === 0) {
+        }
+
+        $subexprlen = $matcherstateobj->length($this->number);
+        if ($subexprlen == 0) {
+            // For empty match return the result immediately.
             return true;
         }
 
+        if ($pos >= $str->length()) {
+            // Out of borders.
+            return false;
+        }
+
+        $start = $matcherstateobj->index_first($this->number);
+        $end = $start + $subexprlen - 1;
+
         $strcopy = clone $str;
-        if ($this->caseinsensitive) {
+        if ($this->caseless) {
             $strcopy->tolower();
         }
-        $matchlen = 0;
-        $result = true;
+
         // Check char by char.
-        for ($i = $start; $result && $i <= $end && $matchlen + $pos < $str->length(); $i++) {
-            $result = $result && ($strcopy[$i] === $strcopy[$pos + $matchlen]);
+        $result = true;
+        for ($i = $start; $result && $i <= $end && $length + $pos < $strcopy->length(); $i++) {
+            $result = $result && ($strcopy[$i] == $strcopy[$pos + $length]);
             if ($result) {
-                $matchlen++;
+                $length++;
+            } else {
+                break;
             }
         }
+
         // If the string has not enough characters.
-        if ($pos + $subpattlen - 1 >= $str->length()) {
+        if ($pos + $subexprlen - 1 >= $strcopy->length()) {
             $result = false;
         }
-        $length = $matchlen;
+
         return $result;
     }
 
     public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
         // TODO: check for assertions in case of $length == 0
-        if (!$matcherstateobj->is_subpattern_captured($this->number)) {
+        if (!$matcherstateobj->is_subexpr_captured($this->number)) {
             return new qtype_poasquestion_string('');
         }
         $start = $matcherstateobj->index_first($this->number);
@@ -1069,47 +1576,34 @@ class qtype_preg_leaf_backref extends qtype_preg_leaf {
     }
 }
 
-class qtype_preg_leaf_option extends qtype_preg_leaf {
-    public $posopt;
-    public $negopt;
-
-    public function __construct($posopt = null, $negopt = null) {
-        $this->type = qtype_preg_node::TYPE_LEAF_OPTIONS;
-        $this->posopt = $posopt;
-        $this->negopt = $negopt;
-    }
-    protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
-        die ('TODO: implements abstract function match for qtype_preg_leaf_option class before use it!');
-    }
-    public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
-        die ('TODO: implements abstract function character for qtype_preg_leaf_option class before use it!');
-    }
-    public function tohr() {
-        $result = '(?';
-        if (!empty($this->posopt)) {
-            $result .= $this->posopt;
-        }
-        if (!empty($this->negopt)) {
-            $result .= '-'.$this->negopt;
-        }
-        return $result.')';
-    }
-}
-
 class qtype_preg_leaf_recursion extends qtype_preg_leaf {
 
     public $number;
 
     public function __construct($number = null) {
         $this->type = qtype_preg_node::TYPE_LEAF_RECURSION;
+        $this->subtype = $this->type;
         $this->number = $number;
     }
+
+    public function lang_key($usedescription = false) {
+        $result = parent::lang_key($usedescription);
+        if ($usedescription && $this->number === 0) {
+            $result .= '_all';
+        } else if ($usedescription && is_string($this->number)) {
+            $result .= '_name';
+        }
+        return $result;
+    }
+
     protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
-        die ('TODO: implements abstract function match for qtype_preg_leaf_recursion class before use it!');
+        die ('TODO: implement abstract function match for qtype_preg_leaf_recursion class before use it!');
     }
+
     public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
-        die ('TODO: implements abstract function character for qtype_preg_leaf_recursion class before use it!');
+        die ('TODO: implement abstract function character for qtype_preg_leaf_recursion class before use it!');
     }
+
     public function tohr() {
         return 'recursion';
     }
@@ -1181,50 +1675,33 @@ class qtype_preg_leaf_control extends qtype_preg_leaf {
     }
 }
 
+class qtype_preg_leaf_options extends qtype_preg_leaf {
+    public $posopt;
+    public $negopt;
 
-/**
- * Defines operator nodes.
- */
-abstract class qtype_preg_operator extends qtype_preg_node {
-
-    /** An array of operands. */
-    public $operands = array();
-
-    public function __clone() {
-        // When clonning an operator we also want its subtree to be cloned.
-        foreach ($this->operands as $i => $operand) {
-            $this->operands[$i] = clone $operand;
-        }
+    public function __construct($posopt = null, $negopt = null) {
+        $this->type = qtype_preg_node::TYPE_LEAF_OPTIONS;
+        $this->subtype = $this->type;
+        $this->posopt = $posopt;
+        $this->negopt = $negopt;
     }
-
-    public function dot_script($styleprovider, $isroot = true) {
-        // Calculate the node name and style.
-        $nodename = $this->id;
-        $style = $nodename . $styleprovider->get_style($this) . ';';
-
-        // Get child dot scripts and styles.
-        $childscripts = array();
-        foreach ($this->operands as $operand) {
-            $tmp = $operand->dot_script($styleprovider, false);
-            $childscripts[] = $tmp[0];
-            $style .= $tmp[1];
+    protected function match_inner($str, $pos, &$length, $matcherstateobj = null) {
+        die ('TODO: implement abstract function match for qtype_preg_leaf_options class before use it!');
+    }
+    public function next_character($str, $pos, $length = 0, $matcherstateobj = null) {
+        die ('TODO: implement abstract function character for qtype_preg_leaf_options class before use it!');
+    }
+    public function tohr() {
+        $result = '(?';
+        if (!empty($this->posopt)) {
+            $result .= $this->posopt;
         }
-
-        // Form the result.
-        $dotscript = '';
-        foreach ($childscripts as $childscript) {
-            $dotscript .= $nodename . '->' . $childscript;
+        if (!empty($this->negopt)) {
+            $result .= '-'.$this->negopt;
         }
-        if ($isroot) {
-            $dotscript = $styleprovider->get_dot_head() . $style . $dotscript . $styleprovider->get_dot_tail();
-            return $dotscript;
-        } else {
-            return array($dotscript, $style);
-        }
-        return $result;
+        return $result.')';
     }
 }
-
 
 /**
  * Defines finite quantifiers with left and right borders, unary operator.
@@ -1234,8 +1711,8 @@ class qtype_preg_node_finite_quant extends qtype_preg_operator {
 
     /** Is quantifier lazy? */
     public $lazy;
-    /** Is quantifier greed? */
-    public $greed;
+    /** Is quantifier greedy? */
+    public $greedy;
     /** Is quantifier possessive? */
     public $possessive;
     /** Smallest possible repetition number. */
@@ -1243,15 +1720,54 @@ class qtype_preg_node_finite_quant extends qtype_preg_operator {
     /** Biggest possible repetition number. */
     public $rightborder;
 
-    public function __construct($leftborder = 0, $rightborder = 0, $lazy = false, $greed = true, $possessive = false) {
+    public function __construct($leftborder = 0, $rightborder = 0, $lazy = false, $greedy = true, $possessive = false) {
         $this->type = qtype_preg_node::TYPE_NODE_FINITE_QUANT;
+        $this->subtype = $this->type;
         $this->leftborder = $leftborder;
         $this->rightborder = $rightborder;
         $this->lazy = $lazy;
-        $this->greed = $greed;
+        $this->greedy = $greedy;
         $this->possessive = $possessive;
     }
-    //TODO - ui_nodename()
+
+    public function is_subpattern() {
+        return true;    // Finite quantifier is a subpattern.
+    }
+
+    public function calculate_nflf(&$followpos) {
+        parent::calculate_nflf($followpos);
+        $this->nullable = $this->nullable || $this->leftborder == 0;
+        // TODO - followpos for situations like {2,10}
+    }
+
+    public function lang_key($usedescription = false) {
+        $result = parent::lang_key($usedescription);
+        if ($usedescription) {
+            if ($this->leftborder == 0) {
+                $result .= '_0';
+                if ($this->rightborder == 1) {
+                    $result .= '1';
+                }
+            } else if ($this->leftborder == 1) {
+                $result .= '_1';
+            } else if ($this->leftborder == $this->rightborder) {
+                $result .= '_strict';
+            }
+        }
+        return $result;
+    }
+
+    public function lang_key_for_greediness() {
+        if ($this->lazy) {
+            return 'description_quant_lazy';
+        }
+        if ($this->possessive) {
+            return 'description_quant_possessive';
+        }
+        return 'description_quant_greedy';
+    }
+
+    // TODO - ui_nodename().
 }
 
 /**
@@ -1261,40 +1777,178 @@ class qtype_preg_node_infinite_quant extends qtype_preg_operator {
 
     /** Is quantifier lazy? */
     public $lazy;
-    /** Is quantifier greed? */
-    public $greed;
+    /** Is quantifier greedy? */
+    public $greedy;
     /** Is quantifier possessive? */
     public $possessive;
     /** Smallest possible repetition number. */
     public $leftborder;
 
-    public function __construct($leftborder = 0, $lazy = false, $greed = true, $possessive = false) {
+    public function __construct($leftborder = 0, $lazy = false, $greedy = true, $possessive = false) {
         $this->type = qtype_preg_node::TYPE_NODE_INFINITE_QUANT;
+        $this->subtype = $this->type;
         $this->leftborder = $leftborder;
         $this->lazy = $lazy;
-        $this->greed = $greed;
+        $this->greedy = $greedy;
         $this->possessive = $possessive;
     }
-    //TODO - ui_nodename()
+
+    public function is_subpattern() {
+        return true;    // Infinite quantifier is a subpattern.
+    }
+
+    public function calculate_nflf(&$followpos) {
+        parent::calculate_nflf($followpos);
+        $this->nullable = $this->nullable || $this->leftborder == 0;
+        foreach ($this->lastpos as $lastpos) {
+            if (!isset($followpos[$lastpos])) {
+                $followpos[$lastpos] = array();
+            }
+            foreach ($this->operands[0]->firstpos as $firstpos) {
+                if (!in_array($firstpos, $followpos[$lastpos])) {
+                    $followpos[$lastpos][] = $firstpos;
+                }
+            }
+        }
+    }
+
+    public function lang_key($usedescription = false) {
+        $result = parent::lang_key($usedescription);
+        if ($usedescription) {
+            $result = 'description_' . $this->subtype;
+            if ($this->leftborder == 0) {
+                $result .= '_0';
+            } else if ($this->leftborder == 1) {
+                $result .= '_1';
+            }
+        }
+        return $result;
+    }
+
+    public function lang_key_for_greediness() {
+        if ($this->lazy) {
+            return 'description_quant_lazy';
+        }
+        if ($this->possessive) {
+            return 'description_quant_possessive';
+        }
+        return 'description_quant_greedy';
+    }
+
+    // TODO - ui_nodename().
 }
 
 /**
- * Defines concatenation, binary operator.
+ * Defines concatenation, n-ary operator.
  */
 class qtype_preg_node_concat extends qtype_preg_operator {
 
     public function __construct() {
         $this->type = qtype_preg_node::TYPE_NODE_CONCAT;
+        $this->subtype = $this->type;
+    }
+
+    public function is_subpattern() {
+        return false;    // Concatenation is not a subpattern.
+    }
+
+    public function calculate_nflf(&$followpos) {
+        parent::calculate_nflf($followpos);
+        $this->nullable = true;
+        $this->firstpos = array();
+        $this->lastpos = array();
+        $count = count($this->operands);
+        // Nullable and firstpos are calculated as always.
+        for ($i = 0; $i < $count; $i++) {
+            $operand = $this->operands[$i];
+            if ($i == 0 || $this->nullable) {
+                $this->firstpos = array_merge($this->firstpos, $operand->firstpos);
+            }
+            if (!$operand->nullable) {
+                $this->nullable = false;
+            }
+        }
+        // Lastpos is calculated backwards.
+        for ($i = $count - 1; $i >= 0; $i--) {
+            $operand = $this->operands[$i];
+            $this->lastpos = array_merge($this->lastpos, $operand->lastpos);
+            if (!$operand->nullable) {
+                break;
+            }
+        }
+
+        // Followpos is calculated for each operand except the last one.
+        $followpos_prev = array(); // followpos calculated on the previous step.
+        for ($i = $count - 2; $i >= 0; $i--) {
+            $left = $this->operands[$i];
+            $right = $this->operands[$i + 1];
+            $followpos_new = array(); // followpos calculated on this step.
+
+            foreach ($left->lastpos as $lastpos) {
+                if (!isset($followpos[$lastpos])) {
+                    $followpos[$lastpos] = array();
+                }
+                if (!isset($followpos_new[$lastpos])) {
+                    $followpos_new[$lastpos] = array();
+                }
+
+                foreach ($right->firstpos as $firstpos) {
+                    if (!in_array($firstpos, $followpos[$lastpos])) {
+                        $followpos[$lastpos][] = $firstpos;
+                        $followpos_new[$lastpos][] = $firstpos;
+                    }
+                }
+
+                // Right operand is not nullable; continue.
+                if (!$right->nullable || $i == $count - 2) {
+                    continue;
+                }
+
+                // Right operand is nullable. Copy its follopos to current node.
+                foreach ($followpos_prev as $from => $to) {
+                    if (!isset($followpos[$from])) {
+                        $followpos[$from] = array();
+                    }
+                    foreach ($to as $tmp) {
+                        if (!in_array($tmp, $followpos[$lastpos])) {
+                            $followpos[$lastpos][] = $tmp;
+                            $followpos_new[$lastpos][] = $tmp;
+                        }
+                    }
+                }
+            }
+            $followpos_prev = $followpos_new;
+        }
     }
 }
 
 /**
- * Defines alternative, binary operator.
+ * Defines alternation, n-ary operator.
  */
 class qtype_preg_node_alt extends qtype_preg_operator {
 
     public function __construct() {
         $this->type = qtype_preg_node::TYPE_NODE_ALT;
+        $this->subtype = $this->type;
+    }
+
+    public function is_subpattern() {
+        return false;    // Alternation is not a subpattern.
+    }
+
+    public function calculate_nflf(&$followpos) {
+        parent::calculate_nflf($followpos);
+        $this->nullable = false;
+        $this->firstpos = array();
+        $this->lastpos = array();
+        for ($i = 0; $i < count($this->operands); $i++) {
+            $operand = $this->operands[$i];
+            if ($operand->nullable) {
+                $this->nullable = true;
+            }
+            $this->firstpos = array_merge($this->firstpos, $operand->firstpos);
+            $this->lastpos = array_merge($this->lastpos, $operand->lastpos);
+        }
     }
 }
 
@@ -1321,72 +1975,123 @@ class qtype_preg_node_assert extends qtype_preg_operator {
         return 'node assert';
     }
 
-    //TODO - ui_nodename()
-}
-
-/**
- * Defines subpatterns, unary operator.
- */
-class qtype_preg_node_subpatt extends qtype_preg_operator {
-
-    /** Subpattern. */
-    const SUBTYPE_SUBPATT = 'subpatt_node_subpatt';
-    /** Once-only subpattern. */
-    const SUBTYPE_ONCEONLY = 'onceonly_node_subpatt';
-    /** Grouping node. For author's tools only.*/
-    const SUBTYPE_GROUPING = 'grouping_node_supbatt';
-    /** Duplicate subpatterns. For author's tools only.*/
-    const SUBTYPE_DUPLICATE_SUBPATTERNS = 'duplicate_node_subpatt';
-
-    /** Subpattern number. */
-    public $number = -1;
-    /** Array of numbers of nested subpatterns. */
-    public $nested = array();
-
-    public function __construct($number = -1, $nested = array()) {
-        $this->type = qtype_preg_node::TYPE_NODE_SUBPATT;
-        $this->number = $number;
-        $this->nested = $nested;
+    public function is_subpattern() {
+        return true;    // Lookaround assertion is a subpattern.
     }
 
-    //TODO - ui_nodename()
+    public function calculate_nflf(&$followpos) {
+        // parent::calculate_nflf($followpos);
+        $this->nullable = false;
+        $this->firstpos = array($this->id);
+        $this->lastpos = array($this->id);
+    }
+
+    // TODO - ui_nodename().
 }
 
 /**
- * Defines conditional subpatterns, unary, binary or ternary operator.
+ * Defines subexpressions (yes, NOT a subpattern), unary operator.
+ */
+class qtype_preg_node_subexpr extends qtype_preg_operator {
+
+    /** Subexpression. */
+    const SUBTYPE_SUBEXPR = 'subexpr_node_subexpr';
+    /** Once-only subexpression. */
+    const SUBTYPE_ONCEONLY = 'onceonly_node_subexpr';
+    /** Grouping node. For author's tools only.*/
+    const SUBTYPE_GROUPING = 'grouping_node_subexpr';
+    /** Duplicate subexpressions. For authoring tools only.*/
+    const SUBTYPE_DUPLICATE_SUBEXPRESSIONS = 'duplicate_node_subexpr';
+
+    /** Subexpression number. */
+    public $number = -1;
+    /** Subexpression name. */
+    public $name = null;
+
+    public function __construct($subtype, $number = -1, $name = null) {
+        $this->type = qtype_preg_node::TYPE_NODE_SUBEXPR;
+        $this->subtype = $subtype;
+        $this->number = $number;
+        $this->name = $name;
+    }
+
+    public function is_subpattern() {
+        return true;    // Subexpression is a subpattern.
+    }
+
+    public function lang_key($usedescription = false) {
+        $result = parent::lang_key($usedescription);
+        if ($usedescription && $this->name !== null) {
+            $result .= '_name';
+        }
+        return $result;
+    }
+
+    // TODO - ui_nodename().
+}
+
+/**
+ * Defines conditional subexpressions, unary, binary or ternary operator.
  * The first operand yes-pattern, second - no-pattern, third - the lookaround assertion (if any).
  * Possible errors: there is no backreference with such number in expression
  */
-class qtype_preg_node_cond_subpatt extends qtype_preg_operator {
+class qtype_preg_node_cond_subexpr extends qtype_preg_operator {
 
-    /** Absolute/relative/named references to subpatterns. */
-    const SUBTYPE_SUBPATT = 'subpatt_node_cond_subpatt';
+    /** Absolute/relative/named references to subexpressions. */
+    const SUBTYPE_SUBEXPR = 'subexpr_node_cond_subexpr';
     /** Recursion condition. */
-    const SUBTYPE_RECURSION = 'recursion_node_cond_subpatt';
-    /** Define subpattern for reference. */
-    const SUBTYPE_DEFINE = 'define_node_cond_subpatt';
+    const SUBTYPE_RECURSION = 'recursion_node_cond_subexpr';
+    /** Define subexpression for reference. */
+    const SUBTYPE_DEFINE = 'define_node_cond_subexpr';
     /** Positive lookahead assert. */
-    const SUBTYPE_PLA = 'pla_node_cond_subpatt';
+    const SUBTYPE_PLA = 'pla_node_cond_subexpr';
     /** Negative lookahead assert. */
-    const SUBTYPE_NLA = 'nla_node_cond_subpatt';
+    const SUBTYPE_NLA = 'nla_node_cond_subexpr';
     /** Positive lookbehind assert. */
-    const SUBTYPE_PLB = 'plb_node_cond_subpatt';
+    const SUBTYPE_PLB = 'plb_node_cond_subexpr';
     /** Negative lookbehind assert. */
-    const SUBTYPE_NLB = 'nlb_node_cond_subpatt';
+    const SUBTYPE_NLB = 'nlb_node_cond_subexpr';
 
-    /** Subpattern number. */
+    /** Subexpression number. */
     public $number = -1;
-    /** Is condition satisfied?. */
-    public $condbranch = null;
 
     public function __construct($subtype = null, $number = -1, $condbranch = null) {
-        $this->type = qtype_preg_node::TYPE_NODE_COND_SUBPATT;
+        $this->type = qtype_preg_node::TYPE_NODE_COND_SUBEXPR;
         $this->subtype = $subtype;
         $this->number = $number;
-        $this->condbranch = $condbranch;
+        $this->operands = $condbranch === null ? array() : array($condbranch);   // Assertion condition is the first operand.
     }
 
-    //TODO - ui_nodename()
+    public function is_condition_assertion() {
+        return $this->subtype == self::SUBTYPE_PLA || $this->subtype == self::SUBTYPE_NLA || $this->subtype == self::SUBTYPE_PLB || $this->subtype == self::SUBTYPE_NLB;
+    }
+
+    public function is_subpattern() {
+        return true;    // Conditional subexpression is a subpattern.
+    }
+
+    public function calculate_nflf(&$followpos) {
+        parent::calculate_nflf($followpos);
+        // TODO what should be here?
+    }
+
+    public function lang_key($usedescription = false) {
+        if (!$usedescription) {
+            return parent::lang_key($usedescription);
+        }
+        $result = $this->is_condition_assertion()
+            ? 'description_' . $this->type
+            : 'description_' . $this->subtype;
+
+        if ($this->number === 0) {
+            $result .= '_all';
+        } else if (is_string($this->number)) {
+            $result .= '_name';
+        }
+        return $result;
+    }
+
+    // TODO - ui_nodename().
 }
 
 /**
@@ -1394,86 +2099,45 @@ class qtype_preg_node_cond_subpatt extends qtype_preg_operator {
  */
 class qtype_preg_node_error extends qtype_preg_operator {
 
-    const SUBTYPE_UNKNOWN_ERROR                = 'unknown_error_node_error';                    // Unknown parse error.
-    const SUBTYPE_CONDSUBPATT_TOO_MUCH_ALTER   = 'consubpatt_too_much_alter_node_error';        // Too much top-level alternatives in a conditional subpattern.
-    const SUBTYPE_WRONG_CLOSE_PAREN            = 'wrong_close_paren_node_error';                // Closing paren without opening  xxx).
-    const SUBTYPE_WRONG_OPEN_PAREN             = 'wrong_open_paren_node_error';                 // Opening paren without closing  (xxx.
-    const SUBTYPE_QUANTIFIER_WITHOUT_PARAMETER = 'quantifier_without_parameter_node_error';     // Quantifier at the start of the expression  - NOTE - currently incompatible with PCRE which treat it as a character.
-    const SUBTYPE_UNCLOSED_CHARSET             = 'unclosed_charset_node_error';                 // Unclosed brackets in a character set.
-    const SUBTYPE_SET_UNSET_MODIFIER           = 'set_and_unset_same_modifier_node_error';      // Set and unset same modifier at ther same time.
-    const SUBTYPE_UNKNOWN_UNICODE_PROPERTY     = 'unknown_unicode_property_node_error';         // Unknown unicode property.
-    const SUBTYPE_UNKNOWN_POSIX_CLASS          = 'unknown_posix_class_node_error';              // Unknown posix class.
-    const SUBTYPE_UNKNOWN_CONTROL_SEQUENCE     = 'unknown_control_sequence_node_error';         // Unknown control sequence (*...).
-    const SUBTYPE_INCORRECT_CHARSET_RANGE      = 'incorrect_charset_range_node_error';          // Incorrect character set range: [z-a].
-    const SUBTYPE_INCORRECT_QUANT_RANGE        = 'incorrect_quant_range_node_error';            // Incorrect quantifier ranges: {5,3}.
-    const SUBTYPE_SLASH_AT_END_OF_PATTERN      = 'slash_at_end_of_pattern_node_error';          // \ at end of pattern.
-    const SUBTYPE_C_AT_END_OF_PATTERN          = 'c_at_end_of_pattern_node_error';              // \c at end of pattern.
-    const SUBTYPE_INVALID_ESCAPE_SEQUENCE      = 'invalid_escape_sequence_node_error';          // Invalid escape sequence.
-    const SUBTYPE_POSIX_CLASS_OUTSIDE_CHARSET  = 'posix_class_outside_charset_node_error';      // POSIX class ouside of a character set.
-    const SUBTYPE_UNEXISTING_SUBPATT           = 'unexisting_subpatt_node_error';               // Reference to unexisting subpattern.
-    const SUBTYPE_UNKNOWN_MODIFIER             = 'unknown_modifier_node_error';                 // Unknown, wrong or unsupported modifier.
-    const SUBTYPE_MISSING_COMMENT_ENDING       = 'missing_comment_ending_node_error';           // Missing ) after comment.
-    const SUBTYPE_MISSING_CONDSUBPATT_ENDING   = 'missing_condsubpatt_ending_node_error';       // Missing conditional subpattern name ending.
-    const SUBTYPE_MISSING_CALLOUT_ENDING       = 'missing_callout_ending_node_error';           // Missing ) after (?C.
-    const SUBTYPE_MISSING_SUBPATT_ENDING       = 'missing_subpatt_name_ending_node_error';      // Missing subpattern name ending.
-    const SUBTYPE_MISSING_BACKREF_ENDING       = 'missing_backref_name_ending_node_error';      // Missing backreference name ending.
-    const SUBTYPE_MISSING_BACKREF_BEGINNING    = 'missing_backref_name_beginning_node_error';   // Missing backreference name beginning.
-    const SUBTYPE_MISSING_CONTROL_ENDING       = 'missing_control_ending_node_error';           // Missing ) after control sequence.
-    const SUBTYPE_WRONG_CONDSUBPATT_NUMBER     = 'wrong_condsubpatt_number_node_error';         // Wrong conditional subpattern number, digits expected.
-    const SUBTYPE_CONDSUBPATT_ASSERT_EXPECTED  = 'condsubpatt_assert_expected_node_error';      // Assertion or condition expected.
-    const SUBTYPE_CHAR_CODE_TOO_BIG            = 'char_code_too_big_node_error';                // Character code too big.
-    const SUBTYPE_CHAR_CODE_DISALLOWED         = 'char_code_disallowed_node_error';             // Character code disallowed.
-    const SUBTYPE_CONSUBPATT_ZERO_CONDITION    = 'condsubpatt_zero_condition_node_error';       // Invalid condition (?(0).
-    const SUBTYPE_CALLOUT_BIG_NUMBER           = 'callout_big_number_node_error';               // Too big number in (?C...).
-    const SUBTYPE_DUPLICATE_SUBPATT_NAMES      = 'duplicate_subpatt_names_node_error';          // Two named subpatterns have the same name.
-    const SUBTYPE_BACKREF_TO_ZERO              = 'backref_to_zero_error';                       // Backreference to the whole expression.
-    const SUBTYPE_DIFFERENT_SUBPATT_NAMES      = 'different_subpatt_names_node_error';          // Different subpattern names for subpatterns of the same number.
-    const SUBTYPE_SUBPATT_NAME_EXPECTED        = 'subpatt_name_expected_node_error';            // Subpattern name expected.
-    const SUBTYPE_CX_SHOULD_BE_ASCII           = 'cx_should_be_ascii_node_error';               // \c should be followed by an ascii character.
-    const SUBTYPE_LNU_UNSUPPORTED              = 'lnu_unsupported_node_error';                  // \L, \l, \N{name}, \U, and \u are unsupported.
-    const SUBTYPE_UNRECOGNIZED_LBA             = 'unrecognized_lab_node_error';                 // Unrecognized character after (?<.
+    const SUBTYPE_UNKNOWN_ERROR                = 'unknown_error_node_error';                  // Unknown parse error.
+    const SUBTYPE_MISSING_OPEN_PAREN           = 'missing_open_paren_node_error';             // Closing paren without opening  xxx).
+    const SUBTYPE_MISSING_CLOSE_PAREN          = 'missing_close_paren_node_error';            // Opening paren without closing  (xxx.
+    const SUBTYPE_MISSING_COMMENT_ENDING       = 'missing_comment_ending_node_error';         // Missing ) after comment.
+    const SUBTYPE_MISSING_CONDSUBEXPR_ENDING   = 'missing_condsubexpr_ending_node_error';     // Missing conditional subexpression name ending.
+    const SUBTYPE_MISSING_CALLOUT_ENDING       = 'missing_callout_ending_node_error';         // Missing ) after (?C.
+    const SUBTYPE_MISSING_CONTROL_ENDING       = 'missing_control_ending_node_error';         // Missing ) after control sequence.
+    const SUBTYPE_MISSING_SUBEXPR_NAME_ENDING  = 'missing_subexpr_name_ending_node_error';    // Missing subexpression name ending.
+    const SUBTYPE_MISSING_BRACKETS_FOR_G       = 'missing_brackets_for_g_node_error';         // \g is not followed by {}, <>, or ''.
+    const SUBTYPE_MISSING_BRACKETS_FOR_K       = 'missing_brackets_for_k_node_error';         // \k is not followed by {}, <>, or ''.
+    const SUBTYPE_UNCLOSED_CHARSET             = 'unclosed_charset_node_error';               // Unclosed brackets in a character set.
+    const SUBTYPE_POSIX_CLASS_OUTSIDE_CHARSET  = 'posix_class_outside_charset_node_error';    // POSIX class ouside of a character set.
+    const SUBTYPE_QUANTIFIER_WITHOUT_PARAMETER = 'quantifier_without_parameter_node_error';   // Quantifier at the start of the expression. NOTE: currently incompatible with PCRE which treats it as a character.
+    const SUBTYPE_INCORRECT_QUANT_RANGE        = 'incorrect_quant_range_node_error';          // Incorrect quantifier ranges: {5,3}.
+    const SUBTYPE_INCORRECT_CHARSET_RANGE      = 'incorrect_charset_range_node_error';        // Incorrect character set range: [z-a].
+    const SUBTYPE_SET_UNSET_MODIFIER           = 'set_unset_same_modifier_node_error';        // Set and unset same modifier at ther same time.
+    const SUBTYPE_UNSUPPORTED_MODIFIER         = 'unsupported_modifier_node_error';           // Unsupported modifier.
+    const SUBTYPE_UNKNOWN_UNICODE_PROPERTY     = 'unknown_unicode_property_node_error';       // Unknown unicode property.
+    const SUBTYPE_UNKNOWN_POSIX_CLASS          = 'unknown_posix_class_node_error';            // Unknown posix class.
+    const SUBTYPE_UNKNOWN_CONTROL_SEQUENCE     = 'unknown_control_sequence_node_error';       // Unknown control sequence (*...).
+    const SUBTYPE_CONDSUBEXPR_TOO_MUCH_ALTER   = 'condsubexpr_too_much_alter_node_error';     // Too much top-level alternations in a conditional subexpression.
+    const SUBTYPE_CONDSUBEXPR_ASSERT_EXPECTED  = 'condsubexpr_assert_expected_node_error';    // Assertion or condition expected.
+    const SUBTYPE_CONSUBEXPR_ZERO_CONDITION    = 'condsubexpr_zero_condition_node_error';     // Invalid condition (?(0).
+    const SUBTYPE_SLASH_AT_END_OF_PATTERN      = 'slash_at_end_of_pattern_node_error';        // \ at end of pattern.
+    const SUBTYPE_C_AT_END_OF_PATTERN          = 'c_at_end_of_pattern_node_error';            // \c at end of pattern.
+    const SUBTYPE_CX_SHOULD_BE_ASCII           = 'cx_should_be_ascii_node_error';             // \c should be followed by an ascii character.
+    const SUBTYPE_UNEXISTING_SUBEXPR           = 'unexisting_subexpr_node_error';             // Reference to unexisting subexpression.
+    const SUBTYPE_DUPLICATE_SUBEXPR_NAMES      = 'duplicate_subexpr_names_node_error';        // Two named subexpressions have the same name.
+    const SUBTYPE_DIFFERENT_SUBEXPR_NAMES      = 'different_subexpr_names_node_error';        // Different subexpression names for subexpressions of the same number.
+    const SUBTYPE_SUBEXPR_NAME_EXPECTED        = 'subexpr_name_expected_node_error';          // Subexpression name expected.
+    const SUBTYPE_UNRECOGNIZED_PQH             = 'unrecognized_pqh_node_error';               // Unrecognized character after (? or (?-.
+    const SUBTYPE_UNRECOGNIZED_PQLT            = 'unrecognized_pqlt_node_error';              // Unrecognized character after (?<.
+    const SUBTYPE_UNRECOGNIZED_PQP             = 'unrecognized_pqp_node_error';               // Unrecognized character after (?P.
+    const SUBTYPE_CHAR_CODE_TOO_BIG            = 'char_code_too_big_node_error';              // Character code too big.
+    const SUBTYPE_CHAR_CODE_DISALLOWED         = 'char_code_disallowed_node_error';           // Character code disallowed.
+    const SUBTYPE_CALLOUT_BIG_NUMBER           = 'callout_big_number_node_error';             // Too big number in (?C...).
+    const SUBTYPE_LNU_UNSUPPORTED              = 'lnu_unsupported_node_error';                // \L, \l, \N{name}, \U, and \u are unsupported.
 
-    /** Error strings names in qtype_preg.php lang file. */
-    public static $errstrs = array(self::SUBTYPE_UNKNOWN_ERROR                => 'error_PCREincorrectregex',
-                                   self::SUBTYPE_CONDSUBPATT_TOO_MUCH_ALTER   => 'error_threealtincondsubpatt',
-                                   self::SUBTYPE_WRONG_CLOSE_PAREN            => 'error_unopenedparen',
-                                   self::SUBTYPE_WRONG_OPEN_PAREN             => 'error_unclosedparen',
-                                   self::SUBTYPE_QUANTIFIER_WITHOUT_PARAMETER => 'error_quantifieratstart',
-                                   self::SUBTYPE_UNCLOSED_CHARSET             => 'error_unclosedsqbrackets',
-                                   self::SUBTYPE_SET_UNSET_MODIFIER           => 'error_setunsetmod',
-                                   self::SUBTYPE_UNKNOWN_UNICODE_PROPERTY     => 'error_unknownunicodeproperty',
-                                   self::SUBTYPE_UNKNOWN_POSIX_CLASS          => 'error_unknownposixclass',
-                                   self::SUBTYPE_UNKNOWN_CONTROL_SEQUENCE     => 'error_unknowncontrolsequence',
-                                   self::SUBTYPE_INCORRECT_CHARSET_RANGE      => 'error_incorrectcharsetrange',
-                                   self::SUBTYPE_INCORRECT_QUANT_RANGE        => 'error_incorrectquantrange',
-                                   self::SUBTYPE_SLASH_AT_END_OF_PATTERN      => 'error_slashatendofpattern',
-                                   self::SUBTYPE_C_AT_END_OF_PATTERN          => 'error_catendofpattern',
-                                   self::SUBTYPE_INVALID_ESCAPE_SEQUENCE      => 'error_invalidescapesequence',
-                                   self::SUBTYPE_POSIX_CLASS_OUTSIDE_CHARSET  => 'error_posixclassoutsidecharset',
-                                   self::SUBTYPE_UNEXISTING_SUBPATT           => 'error_unexistingsubpatt',
-                                   self::SUBTYPE_UNKNOWN_MODIFIER             => 'error_unknownmodifier',
-                                   self::SUBTYPE_MISSING_COMMENT_ENDING       => 'error_missingcommentending',
-                                   self::SUBTYPE_MISSING_CONDSUBPATT_ENDING   => 'error_missingcondsubpattending',
-                                   self::SUBTYPE_MISSING_CALLOUT_ENDING       => 'error_missingcalloutending',
-                                   self::SUBTYPE_MISSING_SUBPATT_ENDING       => 'error_missingsubpattending',
-                                   self::SUBTYPE_MISSING_BACKREF_ENDING       => 'error_missingbackrefending',
-                                   self::SUBTYPE_MISSING_BACKREF_BEGINNING    => 'error_missingbackrefbeginning',
-                                   self::SUBTYPE_MISSING_CONTROL_ENDING       => 'error_missingcontrolending',
-                                   self::SUBTYPE_WRONG_CONDSUBPATT_NUMBER     => 'error_wrongcondsubpattnumber',
-                                   self::SUBTYPE_CONDSUBPATT_ASSERT_EXPECTED  => 'error_condsubpattassertexpected',
-                                   self::SUBTYPE_CHAR_CODE_TOO_BIG            => 'error_charcodetoobig',
-                                   self::SUBTYPE_CHAR_CODE_DISALLOWED         => 'error_charcodedisallowed',
-                                   self::SUBTYPE_CONSUBPATT_ZERO_CONDITION    => 'error_condsubpattzerocondition',
-                                   self::SUBTYPE_CALLOUT_BIG_NUMBER           => 'error_calloutbignumber',
-                                   self::SUBTYPE_DUPLICATE_SUBPATT_NAMES      => 'error_duplicatesubpattnames',
-                                   self::SUBTYPE_BACKREF_TO_ZERO              => 'error_backreftozero',
-                                   self::SUBTYPE_DIFFERENT_SUBPATT_NAMES      => 'error_differentsubpattnames',
-                                   self::SUBTYPE_SUBPATT_NAME_EXPECTED        => 'error_subpattnameexpected',
-                                   self::SUBTYPE_CX_SHOULD_BE_ASCII           => 'error_cxshouldbeascii',
-                                   self::SUBTYPE_LNU_UNSUPPORTED              => 'error_lnuunsupported',
-                                   self::SUBTYPE_UNRECOGNIZED_LBA             => 'error_unrecognizedlba'
-                                   );
-    /** Additional info. */
+    /** Additional info, should be a string. */
     public $addinfo;
 
     public function __construct($subtype = null, $addinfo = null) {
@@ -1482,17 +2146,8 @@ class qtype_preg_node_error extends qtype_preg_operator {
         $this->addinfo = $addinfo;
     }
 
-    public function dot_script($styleprovider, $isroot = true) {
-        // Calculate the node name, style and the result.
-        $nodename = $this->id;
-        $style = $nodename . $styleprovider->get_style($this) . ';';
-        $dotscript = $nodename . ';';
-        if ($isroot) {
-            $dotscript = $styleprovider->get_dot_head() . $style . $dotscript . $styleprovider->get_dot_tail();
-            return $dotscript;
-        } else {
-            return array($dotscript, $style);
-        }
+    public function is_subpattern() {
+        return false;    // Of course it's not.
     }
 
     /**
@@ -1500,9 +2155,11 @@ class qtype_preg_node_error extends qtype_preg_operator {
      */
     public function error_string() {
         $a = new stdClass;
-        $a->indfirst = $this->indfirst;
-        $a->indlast = $this->indlast;
+        $a->linefirst = $this->position->linefirst;
+        $a->linelast = $this->position->linelast;
+        $a->colfirst = $this->position->colfirst;
+        $a->collast = $this->position->collast;
         $a->addinfo = $this->addinfo;
-        return get_string(qtype_preg_node_error::$errstrs[$this->subtype], 'qtype_preg', $a);
+        return get_string($this->subtype, 'qtype_preg', $a);
     }
 }

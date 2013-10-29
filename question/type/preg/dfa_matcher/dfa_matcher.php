@@ -70,9 +70,9 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
     var $result;
     var $picnum;//number of last picture
     protected $map;//map of symbol's following
-    protected $maxstatecount;
-    protected $maxpasscount;
-	protected $zeroquantdeleted;
+    protected $statelimit;
+    protected $transitionlimit;
+    protected $zeroquantdeleted;
 
     public function name() {
         return 'dfa_matcher';
@@ -83,10 +83,10 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
     }
 
     /**
-    *returns true for supported capabilities
-    @param capability the capability in question
-    @return bool is capanility supported
-    */
+     *returns true for supported capabilities
+     *@param capability the capability in question
+     *@return bool is capanility supported
+     */
     public function is_supporting($capability) {
         switch($capability) {
         case qtype_preg_matcher::PARTIAL_MATCHING :
@@ -105,7 +105,7 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         case qtype_preg_node::TYPE_NODE_ERROR:
             return true;
         }
-        return get_string($pregnode->name(), 'qtype_preg');
+        return get_string($pregnode->type, 'qtype_preg');
     }
 
     /**
@@ -113,12 +113,19 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
     *@param index - number of tree for adding end's leaf.
     */
     function append_end($index) {
-        $root = new qtype_preg_node_concat;
-        $root->operands[1] = new qtype_preg_leaf_meta;
-        $root->operands[1]->subtype = qtype_preg_leaf_meta::SUBTYPE_ENDREG;
-        $root = $this->from_preg_node($root);
-        $root->pregnode->operands[0] = $this->roots[0];
+        $endreg = new qtype_preg_leaf_meta;
+        $endreg->subtype = qtype_preg_leaf_meta::SUBTYPE_ENDREG;
+
+        $root = $this->from_preg_node(new qtype_preg_node_concat);
+        $root->operands[0] = $this->roots[0];
+        $root->operands[1] = $this->from_preg_node($endreg);
         $this->roots[0] = $root;
+        /*
+        $lastindex = count($this->roots[0]);
+        $this->roots[0]->operands[$lastindex] = new qtype_preg_leaf_meta;
+        $this->roots[0]->operands[$lastindex]->subtype = qtype_preg_leaf_meta::SUBTYPE_ENDREG;
+        $this->roots[0]->operands[$lastindex] = $this->from_preg_node($this->roots[0]->operands[$lastindex]);
+        */
     }
 
     /**
@@ -129,7 +136,7 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         if ($index==0) {
             $root = $this->roots[0];
         } else {
-            $root = $this->roots[$index]->pregnode->operands[0];
+            $root = $this->roots[$index]->operands[0];
         }
         $statecount = 0;
         $passcount = 0;
@@ -149,7 +156,7 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
             foreach ($this->finiteautomates[$index][$currentstateindex]->passages as $num => $passage) {
                 $newstate = new finite_automate_state;
                 $statecount++;
-                $fpU = $this->followposU($num, $this->map[0], $this->finiteautomates[$index][$currentstateindex]->passages, $index);        
+                $fpU = $this->followposU($num, $this->map[0], $this->finiteautomates[$index][$currentstateindex]->passages, $index);
                 foreach ($fpU as $follow) {
                     if ($follow < qtype_preg_dfa_node_assert::ASSERT_MIN_NUM) {
                         //if number less then dfa_preg_node_assert::ASSERT_MIN_NUM constant than this is character class, to passages it.
@@ -170,11 +177,11 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
                         end($this->finiteautomates[$index]);
                         $this->finiteautomates[$index][$currentstateindex]->passages[$num] = key($this->finiteautomates[$index]);
                     } else {
-                        //else do passage point to state, which has in fa already                        
+                        //else do passage point to state, which has in fa already
                         $this->finiteautomates[$index][$currentstateindex]->passages[$num] = $this->state($newstate->passages, $index);
                     }
                 }
-                if (($passcount > $this->maxpasscount || $statecount > $this->maxstatecount) && $this->maxstatecount != 0 && $this->maxpasscount != 0) {
+                if (($passcount > $this->transitionlimit || $statecount > $this->statelimit) && $this->statelimit != 0 && $this->transitionlimit != 0) {
                     $this->errors[] = get_string('too_large_fa', 'qtype_preg');
                     return;
                 }
@@ -183,9 +190,6 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         /*
         foreach ($this->finiteautomates[$index] as $key=>$state) {
             $this->del_double($this->finiteautomates[$index][$key]->passages, $index);
-        }
-        foreach ($this->finiteautomates[$index] as $key=>$state) {
-            $this->unite_parallel($this->finiteautomates[$index][$key]->passages, $index);
         }*/
     }
 
@@ -193,46 +197,46 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         $result = $this->compare($str, 0, $offset, false);
         if ($result===false) {
             $errres = new qtype_preg_matching_results(false, array(0), array(0), qtype_preg_matching_results::UNKNOWN_CHARACTERS_LEFT, null);
-            $errres->set_source_info(new qtype_poasquestion_string(''), $this->get_max_subpattern(), $this->get_subpattern_map());
+            $errres->set_source_info(new qtype_poasquestion_string(''), $this->get_max_subexpr(), $this->get_subexpr_map());
             return $errres;
         }
         $extstr = substr($str, 0, $result->offset + $result->index+1);
         if ($result->next===0) {
         } else {
-			if ($result->next=='stringstart') {
-				$extstr = '';
-			} elseif ($result->next=='stringend' || $result->next=='notstringstart' || $result->next=='notstringend') {
-			} elseif ($result->next=='wordchar') {
-				$tmpflag = new qtype_preg_charset_flag;
-				$tmpflag->set_data(qtype_preg_charset_flag::FLAG, qtype_preg_charset_flag::WORD);
-				$tmp = new qtype_preg_leaf_charset;
-				$tmp->flags = array(array($tmpflag));
-				$length=1;
-				$extstr .= $tmp->next_character($extstr, $offset+$result->index, $length);
-			} elseif ($result->next=='notwordchar') {
-				$tmpflag = new qtype_preg_charset_flag;
-				$tmpflag->set_data(qtype_preg_charset_flag::FLAG, qtype_preg_charset_flag::WORD);
-				$tmpflag->negative = true;
-				$tmp = new qtype_preg_leaf_charset;
-				$tmp->flags = array(array($tmpflag));
-				$length=1;
-				$extstr .= $tmp->next_character($extstr, $offset+$result->index, $length);
-			} else {
-				$extstr .= $result->next;
-			}
+            if ($result->next=='stringstart') {
+                $extstr = '';
+            } elseif ($result->next=='stringend' || $result->next=='notstringstart' || $result->next=='notstringend') {
+            } elseif ($result->next=='wordchar') {
+                $tmpflag = new qtype_preg_charset_flag;
+                $tmpflag->set_data(qtype_preg_charset_flag::TYPE_FLAG, qtype_preg_charset_flag::SLASH_W);
+                $tmp = new qtype_preg_leaf_charset;
+                $tmp->flags = array(array($tmpflag));
+                $length=1;
+                $extstr .= $tmp->next_character($extstr, $offset+$result->index, $length);
+            } elseif ($result->next=='notwordchar') {
+                $tmpflag = new qtype_preg_charset_flag;
+                $tmpflag->set_data(qtype_preg_charset_flag::TYPE_FLAG, qtype_preg_charset_flag::SLASH_W);
+                $tmpflag->negative = true;
+                $tmp = new qtype_preg_leaf_charset;
+                $tmp->flags = array(array($tmpflag));
+                $length=1;
+                $extstr .= $tmp->next_character($extstr, $offset+$result->index, $length);
+            } else {
+                $extstr .= $result->next;
+            }
         }
         if (!is_object($extstr)) {
-        	   $extstr = new qtype_poasquestion_string($extstr);
+               $extstr = new qtype_poasquestion_string($extstr);
         }
         if ($result->full) {
             $extmatch = null;
         } else {
             $ext=$result;
             $extmatch = new qtype_preg_matching_results($ext->full, array($ext->offset), array($ext->index+1), $ext->left-1, null);
-            $extmatch->set_source_info($extstr, $this->get_max_subpattern(), $this->get_subpattern_map());
+            $extmatch->set_source_info($extstr, $this->get_max_subexpr(), $this->get_subexpr_map());
         }
         $res = new qtype_preg_matching_results($result->full, array($result->offset), array($result->index+1), $result->left, $extmatch);
-        $res->set_source_info($str, $this->get_max_subpattern(), $this->get_subpattern_map());
+        $res->set_source_info($str, $this->get_max_subexpr(), $this->get_subexpr_map());
         return $res;
     }
 
@@ -249,7 +253,8 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
     *   3)next  - next character (mixed, int(0) for end of string, else string with character which can be next)
  *   If matching is impossible, return bool(false)
     */
-    function compare($string, $assertnumber, $offset = 0, $endanchor = true) {//if main regex then assertnumber is 0        
+    function compare($string, $assertnumber, $offset = 0, $endanchor = true) {//if main regex then assertnumber is 0
+
         $index = 0;//char index in string, comparing begin of first char in string
         $length = 0;//count of character matched with current leaf
         $end = false;//current state is end state, not yet
@@ -263,11 +268,9 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         $acceptedcharcount = -1;
         $ismatch = false;
         $laststates = array();//array of states without changing index
-        if (strpos($this->modifiers, 'i') === false) {
-            $casesens=true;
-        } else {
-            $casesens=false;
-        }
+
+        $casesens = !$this->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_CASELESS);
+
         do {
         /*check current character while: 1)checked substring match with regex
                                          2)current character isn't end of string
@@ -318,7 +321,7 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
                 $foundkey = $key;
                 $ismatch = true;
             }
-            if (array_key_exists(qtype_preg_dfa_leaf_meta::ENDREG, $this->finiteautomates[$assertnumber][$currentstate]->passages)) {
+            if (isset($this->finiteautomates[$assertnumber][$currentstate]->passages[qtype_preg_dfa_leaf_meta::ENDREG])) {
             //if current character is end of string and fa can go to end state.
                 if ($offset + $index == strlen($string)) { //must be end
                     $found = true;
@@ -396,11 +399,11 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
     }
 
     /**
-    *Function search for shortest way from current state to end state
-    @param current - number of current state dfa
-    @param assertnum - number of dfa for which do search
-    @return number of state, which is first step on shortest way to end state and count of left character, as class
-    */
+     *Function search for shortest way from current state to end state
+     *@param current - number of current state dfa
+     *@param assertnum - number of dfa for which do search
+     *@return number of state, which is first step on shortest way to end state and count of left character, as class
+     */
     function wave($current, $assertnum) {
         //form start state of waves: start chars, current states of dfa and states of next step
         $i = 0;
@@ -478,7 +481,7 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
                     }
                 }
                 if (!isset($front[$i]->nextstep)) {
-					     throw new Exception("wave error on regex: $this->regex\n");      
+                         throw new Exception("wave error on regex: $this->regex\n");
                 }
                 $front[$i]->currentstep = $front[$i]->nextstep;
                 $front[$i]->nextstep = array();
@@ -527,26 +530,6 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
             }
         }
     }
-   /**
-    *function unite parallel passages in dfa state
-    *@param $array array of passages of state of dfa
-    *@param $index index of dfa for which do verify sybol unique
-    */
-    protected function unite_parallel(&$array, $index) {
-        foreach ($array as $key1=>$passage1) {
-            foreach ($array as $key2=>$passage2) {
-               if($passage1==$passage2 && $key1!=$key2) {
-                    $newleaf = preg_leaf_combo::get_unite($this->connection[$index][$key1]->pregnode, $this->connection[$index][$key2]->pregnode);
-                    $newleaf = $this->from_preg_node($newleaf);
-                    $this->connection[$index][++$this->maxnum] = $newleaf;
-                    $array[$this->maxnum] = $passage1;
-                    unset($array[$key1]);
-                    unset($array[$key2]);
-                    break;
-               }
-            }
-        }
-    }
     /**
     *function search not marked state if finite automate, while one not marked state will be found, searching will be stopped.
     *@param index - number of automate
@@ -580,9 +563,9 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         if ($this->connection[$index][$number]->pregnode->type == qtype_preg_node::TYPE_LEAF_CHARSET) {//if this leaf is character class
             foreach ($this->connection[$index] as $num => $cc) {
                 if ($cc->pregnode->type == qtype_preg_node::TYPE_LEAF_CHARSET) {
-                    
+
                     //$this->connection[$index][$number]->pregnode->push_negative();
-                    if (array_key_exists($num, $passages) && $this->connection[$index][$number]->pregnode->is_include($cc->pregnode)) {
+                    if (isset($passages[$num]) && $this->connection[$index][$number]->pregnode->is_include($cc->pregnode)) {
                         array_push($equnum, $num);
                     }
                 }
@@ -590,15 +573,15 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         } elseif ($this->connection[$index][$number]->pregnode->type == qtype_preg_node::TYPE_LEAF_META) {//if this leaf is metacharacter
             echo '<BR>'.'LEAF_META used:'.$this->connection[$index][$number]->pregnode->type.'<BR>';
             foreach ($this->connection[$index] as $num => $cc) {
-                if ($cc->pregnode->type == qtype_preg_node::TYPE_LEAF_META && $cc->pregnode->subtype == $this->connection[$index][$number]->pregnode->subtype && array_key_exists($num, $passages)) {
+                if ($cc->pregnode->type == qtype_preg_node::TYPE_LEAF_META && $cc->pregnode->subtype == $this->connection[$index][$number]->pregnode->subtype && isset($passages[$num])) {
                     array_push($equnum, $num);
-                } /*else if ($cc->pregnode->type == qtype_preg_node::TYPE_LEAF_META && $cc->pregnode->subtype == qtype_preg_leaf_meta::SUBTYPE_DOT && array_key_exists($num, $passages)) {
+                } /*else if ($cc->pregnode->type == qtype_preg_node::TYPE_LEAF_META && $cc->pregnode->subtype == qtype_preg_leaf_meta::SUBTYPE_DOT && isset($passages[$num])) {
                     array_push($equnum, $num);
                 }*/
             }
         } elseif ($this->connection[$index][$number]->pregnode->type == qtype_preg_node::TYPE_LEAF_ASSERT) {//if this leaf is assert
             foreach ($this->connection[$index] as $num => $cc) {
-                if ($cc->pregnode->type == qtype_preg_node::TYPE_LEAF_ASSERT && $cc->pregnode->subtype == $this->connection[$index][$number]->pregnode->subtype && array_key_exists($num, $passages)) {
+                if ($cc->pregnode->type == qtype_preg_node::TYPE_LEAF_ASSERT && $cc->pregnode->subtype == $this->connection[$index][$number]->pregnode->subtype && isset($passages[$num])) {
                     array_push($equnum, $num);
                 }
             }
@@ -643,35 +626,47 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         return $result;
     }
     /**
-    *get regex and build finite automates
-    @param regex - regular expirience for which will be build finite automate
-    @param modifiers - modifiers of regular expression
-    */
-    public function __construct($regex = null, $modifiers = null, $options = null) {
+     *get regex and build finite automates
+     * @param regex - regular expirience for which will be build finite automate
+     * @param options - options of regular expression
+     */
+    public function __construct($regex = null, $options = null) {
         global $CFG;
-        $this->picnum=0;
-		$this->zeroquantdeleted = false;
-        if (isset($CFG->qtype_preg_dfa_state_limit)) {
-            $this->maxstatecount = $CFG->qtype_preg_dfa_state_limit;
-        } else {
-            $this->maxstatecount = 0;
-        }
-        if (isset($CFG->qtype_preg_dfa_transition_limit)) {
-            $this->maxpasscount = $CFG->qtype_preg_dfa_transition_limit;
-        } else {
-            $this->maxpasscount = 0;
-        }
-        if (!isset($regex)) {//not build tree and dfa, if regex not given
+
+        if (!isset($regex)) {
             return;
         }
-        parent::__construct($regex, $modifiers, $options);     
+
+        $this->picnum = 0;
+        $this->zeroquantdeleted = false;
+        $this->statelimit = 250;
+        $this->transitionlimit = 250;
+        if (isset($CFG->qtype_preg_dfa_state_limit)) {
+            $this->statelimit = $CFG->qtype_preg_dfa_state_limit;
+        }
+        if (isset($CFG->qtype_preg_dfa_transition_limit)) {
+            $this->transitionlimit = $CFG->qtype_preg_dfa_transition_limit;
+        }
+
+        // Call the parent constructor.
+        if ($options === null) {
+            $options = new qtype_preg_matching_options();
+        }
+        $options->expandquantifiers = true;
+        parent::__construct($regex, $options);
+
+        $bigquant = $this->parser->get_max_finite_quant_borders_difference();
+        if ($bigquant > qtype_preg_dfa_node_finite_quant::MAX_SIZE) {
+            $this->errors[] = get_string('too_large_fa', 'qtype_preg');
+        }
+
         $this->roots[0] = $this->dst_root;//place dst root in engine specific place
-        //building finite automates
-        if ($this->is_error_exists()) {
+        // Build finite automata
+        if ($this->errors_exist()) {
             return;
         }
         $this->append_end(0);
-        //form the map of following
+        //form the followpos map
         $this->roots[0]->number($this->connection[0], $this->maxnum);
         $this->roots[0]->nullable();
         $this->roots[0]->firstpos();
@@ -683,7 +678,7 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         foreach ($this->roots as $key => $value) {
             if ($key!=0) {
                 //TODO: use subtype of assert, when few subtype will be supported.
-                $this->roots[$key] = $this->roots[$key]->pregnode->operands[0];
+                $this->roots[$key] = $this->roots[$key]->operands[0];
                 $this->append_end($key);
                 $this->roots[$key]->number($this->connection[$key], $this->maxnum);
                 $this->roots[$key]->nullable();
@@ -1191,279 +1186,144 @@ class qtype_preg_dfa_matcher extends qtype_preg_matcher {
         }
         foreach ($this->map[0] as $key=>$val) {
             foreach ($val as $key2=>$val2) {
-                if (!array_key_exists($val2, $this->connection[0])) {
-                    unset ($this->map[0][$key][$key2]);
+                if (!isset($this->connection[0][$val2])) {
+                    unset($this->map[0][$key][$key2]);
                 }
             }
         }
-
     }
     /**
     * DFA node factory
     * @param pregnode qtype_preg_node child class instance
     * @return corresponding dfa_preg_node child class instance
     */
-    public function &from_preg_node($pregnode) {
+    public function from_preg_node($pregnode) {
+        if (!is_a($pregnode,'qtype_preg_node')) {
+            return $pregnode;   // The node is already converted.
+        }
+
         if (!$this->zeroquantdeleted) {
-			$res = self::delete_zero_quant($pregnode);
-			if ($res!==true && $res!==false) {
-				$pregnode = $res;
-			}
-			$this->zeroquantdeleted=true;
-		}
-		$name = $pregnode->name();
+            $res = self::delete_zero_quant($pregnode);
+            if ($res != true && $res != false) {
+                $pregnode = $res;
+            }
+            $this->zeroquantdeleted = true;
+        }
+
+        $name = $pregnode->type;
         switch ($name) {
-            case 'node_finite_quant':
-                $pregnode = $this->convert_finite_quant($pregnode);
-                break;
-            case 'node_infinite_quant':
-                $pregnode = $this->convert_infinite_quant($pregnode);
-                break;
-            //TODO write dfa_preg_node_subpatt to process situations like subpattern inside subpattern
-            case 'node_subpatt':
-                $pregnode = $pregnode->operands[0];
-                return $this->from_preg_node($pregnode);
-                break;
+            case 'node_subexpr':
+                return $this->from_preg_node($pregnode->operands[0]);
             case 'node_alt':
-                if ($pregnode->operands[1]->type == qtype_preg_node::TYPE_LEAF_META && $pregnode->operands[1]->subtype == qtype_preg_leaf_meta::SUBTYPE_EMPTY) {
-                    $tmp = $pregnode->operands[0];
-                    $pregnode = new qtype_preg_node_finite_quant;
-                    $pregnode->leftborder = 0;
-                    $pregnode->rightborder = 1;
-                    $pregnode->operands[0] = $tmp;
-                } else if ($pregnode->operands[0]->type == qtype_preg_node::TYPE_LEAF_META && $pregnode->operands[0]->subtype == qtype_preg_leaf_meta::SUBTYPE_EMPTY) {
-                    $tmp = $pregnode->operands[1];
-                    $pregnode = new qtype_preg_node_finite_quant;
-                    $pregnode->leftborder = 0;
-                    $pregnode->rightborder = 1;
-                    $pregnode->operands[0] = $tmp;
-                }
+                $pregnode = $this->convert_alternation($pregnode);
+                break;
         }
         return parent::from_preg_node($pregnode);
     }
 
-	/**
-	* Function delete zero quants subtree from syntax tree
-	* @param node is the subroot of syntax tree, don't need call this function for other node
-	* return true if subtree full deleted or new subroot if changed, false otherwise
-	*/
-	protected function delete_zero_quant($node) {
-		$name = $node->name();
+    /**
+     * Function delete zero quants subtree from syntax tree
+     * @param node is the subroot of syntax tree, don't need call this function for other node
+     * return true if subtree full deleted or new subroot if changed, false otherwise
+     */
+    protected function delete_zero_quant($node) {
+        $name = $node->type;
         switch ($name) {
             case 'node_finite_quant':
-				$res=self::delete_zero_quant($node->operands[0]);
+                $res=self::delete_zero_quant($node->operands[0]);
                 if ($node->rightborder==0 || $res===true) {
-					return true;
-				} elseif (is_a($res, 'preg_node')) {
-					$node->operands[0] = $res;
-				}
+                    return true;
+                } elseif (is_object($res)) {
+                    $node->operands[0] = $res;
+                }
                 break;
-			case 'node_assert':
-			case 'node_subpatt':
+            case 'node_assert':
+            case 'node_subexpr':
             case 'node_infinite_quant':
                 $res=self::delete_zero_quant($node->operands[0]);
                 if ($res===true) {
-					return true;
-				} elseif (is_a('preg_node', $res)) {
-					$node->operands[0] = $res;
-				}
-				break;
+                    return true;
+                } elseif (is_object($res)) {
+                    $node->operands[0] = $res;
+                }
+                break;
             case 'node_alt':
                 $res = array();
-				$res[0]=self::delete_zero_quant($node->operands[0]);
-				$res[1]=self::delete_zero_quant($node->operands[1]);
-				if (is_a($res, 'preg_node')) {
-					$node->operands[0] = $res[0];
-				}
-				if (is_a($res, 'preg_node')) {
-					$node->operands[1] = $res[1];
-				}
-				if ($res[0]===true && $res[1]===true) {
-					return true;
-				} else if ($res[0]===true) {
-					$newsubroot = new qtype_preg_node_finite_quant;
-					$newsubroot->operands[0] = $node->operands[1];
-					return $newsubroot;
-				} else if ($res[1]===true) {
-					$newsubroot = new qtype_preg_node_finite_quant;
-					$newsubroot->operands[0] = $node->operands[0];
-					return $newsubroot;
-				}
-				break;
-			case 'node_concat':
-                $res = array();
-				$res[0]=self::delete_zero_quant($node->operands[0]);
-				$res[1]=self::delete_zero_quant($node->operands[1]);
-				if (is_a($res[0], 'preg_node')) {
-					$node->operands[0] = $res[0];
-				}
-				if (is_a($res[1], 'preg_node')) {
-					$node->operands[1] = $res[1];
-				}
-				if ($res[0]===true && $res[1]===true) {
-					return true;
-				} else if ($res[0]===true) {
-					return $node->operands[1];
-				} else if ($res[1]===true) {
-					return $node->operands[0];
-				}
-				break;
-        }
-		return false;
-	}
-	
-    /**
-    * Function converts operand{} quantificator to operand and operand? combination
-    * @param node node with {}
-    * @return node subtree with ?
-    */
-    protected function &convert_finite_quant($node) {
-		if ($node->rightborder - $node->leftborder > qtype_preg_dfa_node_finite_quant::MAX_SIZE) {
-			return $node;//TODO: increase finite quantificator performance for accepting normal size of quantificator, when will more time.
-		}
-        if (!($node->leftborder==0 && $node->rightborder==1 || $node->leftborder==1 && $node->rightborder==1)) {
-            $tmp = $node->operands[0];
-            $subroot = new qtype_preg_node_concat;
-            $subroot->operands[0] = clone $tmp;
-            $subroot->operands[1] = clone $tmp;
-            $count = $node->leftborder;
-            for ($i=2; $i<$count; $i++) {
-                $newsubroot = new qtype_preg_node_concat;
-                $newsubroot->operands[0] = $subroot;
-                $newsubroot->operands[1] = clone $tmp;
-                $subroot = $newsubroot;
-            }
-            $tmp = new qtype_preg_node_finite_quant;
-            $tmp->leftborder = 0;
-            $tmp->rightborder = 1;
-            $tmp->greed = $node->greed;
-            $tmp->operands[0] = $node->operands[0];
-            if ($node->leftborder == 0) {
-                $subroot->operands[0] = clone $tmp;
-                $subroot->operands[1] = clone $tmp;
-                $count = $node->rightborder - 2;
-            } else if ($node->leftborder == 1) {
-                $subroot->operands[1] = clone $tmp;
-                $count = $node->rightborder - 2;
-            } else {
-                $count = $node->rightborder - $node->leftborder;
-            }
-            for ($i=0; $i<$count; $i++) {
-                $newsubroot = new qtype_preg_node_concat;
-                $newsubroot->operands[0] = $subroot;
-                $newsubroot->operands[1] = clone $tmp;
-                $subroot = $newsubroot;
-            }
-            return $subroot;
-        }
-        return $node;
-    }
-
-    /**
-    * Function convert operand{} quantificater to operand, operand? and operand* combination
-    * @param node node with {}
-    * @return node subtree with ? *
-    */
-    protected function &convert_infinite_quant($node) {
-        if ($node->leftborder == 0) {
-            return $node;
-        } else if ($node->leftborder == 1) {
-            $tmp = $node->operands[0];
-            $subroot = new qtype_preg_node_concat;
-            $subroot->operands[0] = clone $tmp;
-            $subroot->operands[1] = clone $node;
-            $subroot->operands[1]->leftborder = 0;
-        } else {
-            $tmp = $node->operands[0];
-            $subroot = new qtype_preg_node_concat;
-            $subroot->operands[0] = clone $tmp;;
-            $subroot->operands[1] = clone $tmp;
-            $count = $node->leftborder;
-            for ($i=2; $i<$count; $i++) {
-                $newsubroot = new qtype_preg_node_concat;
-                $newsubroot->operands[0] = $subroot;
-                $newsubroot->operands[1] = clone $tmp;
-                $subroot = $newsubroot;
-            }
-            $newsubroot = new qtype_preg_node_concat;
-            $newsubroot->operands[0] = clone $subroot;
-            $newsubroot->operands[1] = clone $node;
-            $newsubroot->operands[1]->leftborder = 0;
-            $subroot = $newsubroot;
-        }
-        return $subroot;
-    }
-
-    /**
-    *function get string and compare it with regex
-    *@param response - string which will be compared with regex
-    *@return result of compring, see compare function for format of result
-    */
-/*    function match_inner($response) {
-        if ($response === '' && $this->roots[0]->pregnode->operands[0]->nullable) {
-            $matchresult = new qtype_preg_matching_results(true, true, array(0), array(0), '', 0);
-        } else {
-            $result = new stdClass;
-            $result->full = false;
-            $result->index = -1;
-            $result->left = 999999;
-            for ($i=0; $i<=strlen($response) && !$result->full; $i++) {
-                $tmpres = $this->compare($response, 0, $i, $this->anchor->end);
-                if ($tmpres !== false) {
-                    if ($tmpres->full || $tmpres->left < $result->left || !isset($result->next)&&false) {
-                        $result = $tmpres;
-                    }
-                } else {
-                //TODO: error message about zero length loop
+                $res[0] = self::delete_zero_quant($node->operands[0]);
+                $res[1] = self::delete_zero_quant($node->operands[1]);
+                if (is_object($res)) {
+                    $node->operands[0] = $res[0];
                 }
-            }
-
-            if ($result->next === 0) {
-                $next = '';
-            } else {
-                $next = $result->next;
-            }
-            $matchresult = new qtype_preg_matching_results($result->full, array($result->offset), array($result->index+1), $result->next, $result->left);
-        }
-        return $matchresult;
-    }
-    */
-
-    protected function match_preprocess($str) {
-        if ($str === '' && $this->roots[0]->pregnode->operands[0]->nullable) {//TODO - why operands[0] instead of root itself?
-            return new qtype_preg_matching_results(true, array(0), array(0), 0);
+                if (is_object($res)) {
+                    $node->operands[1] = $res[1];
+                }
+                if ($res[0]===true && $res[1]===true) {
+                    return true;
+                } else if ($res[0]===true) {
+                    $newsubroot = new qtype_preg_node_finite_quant;
+                    $newsubroot->operands[0] = $node->operands[1];
+                    return $newsubroot;
+                } else if ($res[1]===true) {
+                    $newsubroot = new qtype_preg_node_finite_quant;
+                    $newsubroot->operands[0] = $node->operands[0];
+                    return $newsubroot;
+                }
+                break;
+            case 'node_concat':
+                $res = array();
+                $res[0]=self::delete_zero_quant($node->operands[0]);
+                $res[1]=self::delete_zero_quant($node->operands[1]);
+                if (is_object($res[0])) {
+                    $node->operands[0] = $res[0];
+                }
+                if (is_object($res[1])) {
+                    $node->operands[1] = $res[1];
+                }
+                if ($res[0]===true && $res[1]===true) {
+                    return true;
+                } else if ($res[0]===true) {
+                    return $node->operands[1];
+                } else if ($res[1]===true) {
+                    return $node->operands[0];
+                }
+                break;
         }
         return false;
     }
 
-    /**
-    *@return list of supported operation as array of string
-    */
-    static function list_of_supported_operations_and_operands() {
-        $result = array(
-                        'character                                  - a',
-                        'character class                            - [abc][a-c] and other formats of CC',
-                        'negative character class                   - [^abc] ...',
-                        'character class in \w\W\d\D\s\S\t format',
-                        'empty                                      - something|',
-                        'metasymbol dot                             - .',
-                        'concatenation',
-                        'alternative                                - ab|cd',
-                        'greed iteration                            - a*',
-                        'greed quantificator plus                   - a+',
-                        'greed quantificator in curly               - a{15,137}',
-                        'greed question quantificator               - a?',
-                        'true forward assert                        - (?=...)',
-                        'grouping                                   - (?:...)'
-                       );
-        return $result;
-    }
-    public function print_connection($index) {
-        foreach ($this->connection[$index] as $num=>$leaf) {
-            echo 'number: ', $num, '</br>';
-            $leaf->print_self(0);
-            echo '</br>';
+    protected function convert_alternation($node) {
+        $newoperands = array();
+        $nullable = false;
+        foreach ($node->operands as $operand) {
+            if ($operand->type == qtype_preg_node::TYPE_LEAF_META && $operand->subtype == qtype_preg_leaf_meta::SUBTYPE_EMPTY) {
+                $nullable = true;
+            } else {
+                $newoperands[] = $operand;
+            }
         }
+
+        if (!$nullable) {
+            return $node;
+        }
+
+        // Convert alternation to {0,1} quantifier.
+        $quant = new qtype_preg_node_finite_quant(0, 1);
+        if (count($newoperands) > 1) {
+            $quant->operands[0] = $node;
+        } else {
+            $quant->operands[0] = $newoperands[0];
+        }
+        return $quant;
+    }
+
+    public function print_connection($index) {
+        echo "\n\n\n\n\n\n\n";
+        foreach ($this->connection[$index] as $num=>$leaf) {
+            echo 'number: ', $num, "\n";
+            $leaf->print_self(0);
+            echo "\n";
+        }
+        echo "\n\n\n\n\n\n\n";
     }
     /**
     * Debug function draw finite automate with number number in human readable form

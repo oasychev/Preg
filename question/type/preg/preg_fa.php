@@ -39,24 +39,63 @@ class qtype_preg_fa_transition {
     public $pregleaf;
     /** @var object of qtype_preg_fa_state class - state which transition leads to. */
     public $to;
-    /** @var boolean  true if a transition consume characters, false if not. A nonassertion automaton could have such transitions only at start and at end of the automaton. */
-    public $consumechars;
+    /** @var boolean - true if a transition consumes characters. A non-assertion automaton could have such transitions only at start and at end of the automaton. */
+    public $consumeschars;
+    /** @var array of qtype_preg_nodes representing subpatterns starting at this transition. */
+    public $subpatt_start;
+    /** @var array of qtype_preg_nodes representing subpatterns ending at this transition. */
+    public $subpatt_end;
+    /** @var array of qtype_preg_nodes representing subexpressions starting at this transition. */
+    public $subexpr_start;
+    /** @var array of qtype_preg_nodes representing subexpressions ending at this transition. */
+    public $subexpr_end;
 
     public function __clone() {
         $this->pregleaf = clone $this->pregleaf;    // When clonning a transition we also want a clone of its pregleaf.
     }
 
-    public function __construct(&$from, &$pregleaf, &$to, $consumechars = true) {
+    public function __construct(&$from, &$pregleaf, &$to, $consumeschars = true) {
         $this->from = $from;
         $this->pregleaf = clone $pregleaf;
         $this->to = $to;
-        $this->consumechars = $consumechars;
+        $this->consumeschars = $consumeschars;
+        $this->subpatt_start = array();
+        $this->subpatt_end = array();
+        $this->subexpr_start = array();
+        $this->subexpr_end = array();
+    }
+
+    public function get_label_for_dot() {
+        $lab = $this->pregleaf->tohr() . ',';
+
+        if (count($this->subpatt_start) > 0) {
+            $lab = $lab . 'starts';
+            foreach ($this->subpatt_start as $node) {
+                $lab = $lab . "{$node->subpattern},";
+            }
+        }
+        if (count($this->subpatt_end) > 0) {
+            $lab = $lab . 'ends';
+            foreach ($this->subpatt_end as $node) {
+                $lab = $lab . "{$node->subpattern},";
+            }
+        }
+
+        $lab = substr($lab, 0, strlen($lab) - 1);
+        $lab = '"' . str_replace('"', '\"', $lab) . '"';
+
+        // Dummy transitions are displayed dotted.
+        if ($this->consumeschars) {
+            return $this->from->number . '->' . $this->to->number . "[label = $lab];";
+        } else {
+            return $this->from->number . '->' . $this->to->number . "[label = $lab, style = dotted];";  // Dummy transitions are displayed dotted.
+        }
     }
 }
 
 /**
-* Class for finite automaton state.
-*/
+ * Class for finite automaton state.
+ */
 class qtype_preg_fa_state {
 
     /** @var object reference to the qtype_preg_finite_automaton object this state belongs to.
@@ -64,7 +103,7 @@ class qtype_preg_fa_state {
      * We are violating principle "a child shouldn't know the parent" there, but the state need to signal important information back to
      * automaton during its construction: becoming non-deterministic, having eps or pure-assert transitions etc.
      */
-    protected $FA;
+    protected $fa;
     /** @var array of qtype_preg_fa_transition child objects, indexed. */
     protected $outtransitions;
     /** @var boolean whether state is deterministic, i.e. whether it has no characters with two or more possible outgoing transitions. */
@@ -72,15 +111,15 @@ class qtype_preg_fa_state {
     /** @var int number of the state. */
     public $number;
 
-    public function __construct(&$FA = null) {
-        $this->FA = $FA;
+    public function __construct(&$fa = null) {
+        $this->fa = $fa;
         $this->number = -1;    // States should be numerated from 0 by calling qtype_preg_finite_automaton::numerate_states().
         $this->outtransitions = array();
         $this->deterministic = true;
     }
 
-    public function set_FA(&$FA) {
-        $this->FA = $FA;
+    public function set_fa(&$fa) {
+        $this->fa = $fa;
     }
 
     /**
@@ -91,27 +130,18 @@ class qtype_preg_fa_state {
     public function add_transition(&$transition) {
         $transition->from = $this;
         $this->outtransitions[] = $transition;
-        //TODO - check whether it makes a node non-deterministic
-        //TODO - signal automaton if a node become non-deterministic, see make_nondeterministic function in automaton class
+        // TODO - check whether it makes a node non-deterministic.
+        // TODO - signal automaton if a node become non-deterministic, see make_nondeterministic function in automaton class.
 
         if ($transition->pregleaf->subtype === qtype_preg_leaf_meta::SUBTYPE_EMPTY) {
-            $this->FA->epsilon_transtion_added();
+            $this->fa->epsilon_transtion_added();
         }
 
         if ($transition->pregleaf->type === qtype_preg_node::TYPE_LEAF_ASSERT) {
-            $this->FA->assertion_transition_added();
+            $this->fa->assertion_transition_added();
         }
 
-        $this->FA->transition_added();
-    }
-
-    /**
-     * Moves transitions from one state to another.
-     *
-     * @param with a reference to an object of qtype_preg_fa_state to take transitions from.
-     */
-    public function merge_transition_set(&$with) {
-        $this->outtransitions = array_merge($this->outtransitions, $with->outtransitions);
+        $this->fa->transition_added();
     }
 
     /**
@@ -121,7 +151,7 @@ class qtype_preg_fa_state {
      * @param newref - a reference to the new state.
      */
     public function update_state_references(&$oldref, &$newref) {
-        foreach($this->outtransitions as $transition) {
+        foreach ($this->outtransitions as $transition) {
             if ($transition->to === $oldref) {
                 $transition->to = $newref;
             }
@@ -136,7 +166,7 @@ class qtype_preg_fa_state {
      * Returns an array of transitions possible with current string and position.
      */
     public function possible_transitions($str, $pos) {
-        //TODO - use pregnode->match from transitions
+        // TODO - use pregnode->match from transitions.
     }
 
     /**
@@ -161,6 +191,9 @@ abstract class qtype_preg_finite_automaton {
     protected $startstate;
     /** @var object of qtype_preg_fa_state - end state. */
     protected $endstate;
+
+    /** @var two-dimensional array of qtype_preg_fa_transition objects: first index is "from", second index is "to"*/
+    protected $adjacencymatrix;
 
     /** @var boolean is automaton really deterministic - it can be even if it shoudn't.
      *
@@ -324,7 +357,7 @@ abstract class qtype_preg_finite_automaton {
      */
     public function add_state(&$state) {
         $this->states[] = $state;
-        $state->set_FA($this);
+        $state->set_fa($this);
         $this->statecount++;
         if ($this->statecount > $this->statelimit) {
             throw new qtype_preg_toolargefa_exception('');
@@ -337,7 +370,7 @@ abstract class qtype_preg_finite_automaton {
      * @param state a reference to the state to be removed.
      */
     public function remove_state(&$state) {
-        foreach ($this->states as $key=>$curstate) {
+        foreach ($this->states as $key => $curstate) {
             if ($curstate === $state) {
                 $this->transitioncount -= count($curstate->outgoing_transitions());
                 $this->statecount--;
@@ -351,7 +384,7 @@ abstract class qtype_preg_finite_automaton {
      * Read and create a FA from dot-like language. Mainly used for unit-testing.
      */
     public function read_fa($dotstring) {
-        //TODO - kolesov
+        // TODO - kolesov.
     }
 
     /**
@@ -363,20 +396,8 @@ abstract class qtype_preg_finite_automaton {
     public function numerate_states() {
         $result = array();
         $idcounter = 0;
-        $curstates = array($this->startstate);
-        while (count($curstates) !== 0) {
-            $newstates = array();
-            while (count($curstates) !== 0) {
-                $curstate = array_pop($curstates);
-                if ($curstate->number === -1) {
-                    $curstate->number = $idcounter;
-                    $result[$idcounter++] = $curstate;
-                    foreach ($curstate->outgoing_transitions() as $transition) {
-                        $newstates[] = $transition->to;
-                    }
-                }
-            }
-            $curstates = $newstates;
+        foreach ($this->states as $state) {
+            $state->number = $idcounter++;
         }
         return $result;
     }
@@ -385,7 +406,7 @@ abstract class qtype_preg_finite_automaton {
      * Creates a dot-file for the given FA. Mainly used for debugging.
      */
     public function write_fa_to_dot($file) {
-        //TODO - kolesov
+        // TODO - kolesov.
     }
 
     /**
@@ -395,17 +416,17 @@ abstract class qtype_preg_finite_automaton {
      * @return boolean true if this FA equal to $another.
      */
     public function compare_fa($another) {
-        //TODO - streltsov
+        // TODO - streltsov.
     }
 
     /**
      * Merges simple assertion transitions into other transtions.
      */
     public function merge_simple_assertions() {
-        if (!$this->hasassertiontransitions) {    //Nothing to merge
+        if (!$this->hasassertiontransitions) {    // Nothing to merge.
             return;
         }
-        //TODO - merge
+        // TODO - merge.
         $this->hasassertiontransitions = false;
     }
 
@@ -413,10 +434,10 @@ abstract class qtype_preg_finite_automaton {
      * Deletes epsilon-transitions from the automaton.
      */
     public function aviod_eps() {
-        if (!$this->haseps) {    //Nothing to delete.
+        if (!$this->haseps) {    // Nothing to delete.
             return;
         }
-        //TODO - delete eps
+        // TODO - delete eps.
         $this->haseps = false;
     }
 
@@ -424,7 +445,7 @@ abstract class qtype_preg_finite_automaton {
      * Changes automaton to not contain wordbreak  simple assertions (\b and \B).
      */
     public function avoid_wordbreaks() {
-    //TODO - delete \b and \B
+        // TODO - delete \b and \B.
     }
 
     /**
@@ -435,13 +456,13 @@ abstract class qtype_preg_finite_automaton {
      * @param isstart boolean intersect by superpose start or end state of anotherfa with stateindex state.
      */
     public function instersect_fa($anotherfa, $stateidnex, $isstart) {
-        //TODO
+        // TODO.
     }
 
     /**
      * Return set substraction: $this - $anotherfa. Used to get negation.
      */
-    abstract public function substract_fa($anotherfa);//TODO - functions that could be implemented only for DFA should be moved to DFA class
+    abstract public function substract_fa($anotherfa);// TODO - functions that could be implemented only for DFA should be moved to DFA class.
 
     /**
      * Return inversion of fa.
@@ -449,15 +470,15 @@ abstract class qtype_preg_finite_automaton {
     abstract public function invert_fa();
 
     abstract public function match($str, $pos);
-    abstract public function next_character();//TODO - define arguments
+    abstract public function next_character();// TODO - define arguments.
 
     /**
      * Finds shortest possible string, completing partial given match.
      */
-    abstract public function complete_match();//TODO - define arguments
+    abstract public function complete_match();// TODO - define arguments.
 
     public function __clone() {
-        //TODO - clone automaton
+        // TODO - clone automaton.
     }
 
     /**
@@ -466,53 +487,24 @@ abstract class qtype_preg_finite_automaton {
      * @param filename - name of the resulting image file.
      */
     public function draw($type, $filename) {
-        $result = "digraph {\nrankdir = LR;\n";
+        $result = 'digraph {rankdir = LR;';
         foreach ($this->states as $curstate) {
             $index1 = $curstate->number;
 
             if (count($curstate->outgoing_transitions()) == 0) {
                 // Draw a single state.
-                $result .= "$index1\n";
+                $result .= $index1 . ';';
             } else {
                 // Draw a state with transitions.
                 foreach ($curstate->outgoing_transitions() as $curtransition) {
-                    $index2 = $curtransition->to->number;
-                    $lab = $curtransition->pregleaf->tohr() . ',';
-
-                    // Information about subpatterns.
-                    $subpatt_start = array();
-                    $subpatt_end = array();
-                    foreach ($curtransition->tags as $value) {
-                        if ($value % 2 == 0) {
-                            $subpatt_start[] = $value / 2;
-                        } else {
-                            $subpatt_end[] = ($value - 1) / 2;
-                        }
-                    }
-                    if (count($subpatt_start) > 0) {
-                        $lab = $lab . 'starts';
-                        foreach ($subpatt_start as $num) {
-                            $lab = $lab . "$num,";
-                        }
-                    }
-                    if (count($subpatt_end) > 0) {
-                        $lab = $lab . 'ends';
-                        foreach ($subpatt_end as $num) {
-                            $lab = $lab . "$num,";
-                        }
-                    }
-                    $lab = substr($lab, 0, strlen($lab) - 1);
-                    $lab = '"' . str_replace('"', '\"', $lab) . '"';
-                    // Dummy transitions are displayed dotted.
-                    if ($curtransition->consumechars) {
-                        $result .= "$index1->$index2" . "[label = $lab];\n";
-                    } else {
-                        $result .= "$index1->$index2" . "[label = $lab, style = dotted];\n";
-                    }
+                    $result .= $curtransition->get_label_for_dot();
                 }
             }
         }
-        $result .= "};";
+        // Make start and end states more fancy.
+        $result .= $this->start_state()->number . '[shape=rarrow];';
+        $result .= $this->end_state()->number . '[shape=doublecircle];';
+        $result .= '};';
         qtype_preg_regex_handler::execute_dot($result, $type, $filename);
     }
 
@@ -520,7 +512,7 @@ abstract class qtype_preg_finite_automaton {
     /**
      * Reads fa from a special code and modifies current object.
      * code format: i->abc->j;k->charset->l; e.t.c.
-     * maximum count of subpatterns when reading fa is 9 in current implementation.
+     * maximum count of subexpressions when reading fa is 9 in current implementation.
      * @param facode string with the code of the finite automaton.
      */
     public function input_fa($facode) {
@@ -549,7 +541,7 @@ abstract class qtype_preg_finite_automaton {
         $tmpstr = '';
         $transition = self::read_transition($facode, $end);
         $end++;
-        while($facode[$end - 2] != '-' || $facode[$end - 1] != '>') {
+        while ($facode[$end - 2] != '-' || $facode[$end - 1] != '>') {
             $end++;
         }
         while ($facode[$end] != ';') {
@@ -559,7 +551,7 @@ abstract class qtype_preg_finite_automaton {
         $lst = (int)$tmpstr;
         if (!isset($this->states[$fir])) {
             $this->states[$fir] = new qtype_preg_fa_state();
-            $this->states[$fir]->set_FA($this);
+            $this->states[$fir]->set_fa($this);
             $this->statecount++;
             if ($this->statecount > $this->statelimit) {
                 throw new qtype_preg_toolargefa_exception('');
@@ -567,7 +559,7 @@ abstract class qtype_preg_finite_automaton {
         }
         if (!isset($this->states[$lst])) {
             $this->states[$lst] = new qtype_preg_fa_state();
-            $this->states[$lst]->set_FA($this);
+            $this->states[$lst]->set_fa($this);
             $this->statecount++;
             if ($this->statecount > $this->statelimit) {
                 throw new qtype_preg_toolargefa_exception('');
@@ -586,11 +578,11 @@ abstract class qtype_preg_finite_automaton {
      */
     static protected function read_transition($facode, $start) {
         $i = $start;
-        $subpattstarts = array();
-        $subpattends = array();
+        $subexprstarts = array();
+        $subexprends = array();
         $charset = '';
         $error = false;
-        // Input subpatterns.
+        // Input subexpressions.
         if ($facode[$start] == '#') {
             $i = $start + 1;
             do {
@@ -599,13 +591,13 @@ abstract class qtype_preg_finite_automaton {
                     echo "<BR><BR><BR>Incorrect fa code!<BR><BR><BR>";
                     // TODO: correct error message.
                 } else if ($facode[$i] == 's') {
-                    $subpattstarts[] = (int)$facode[$i + 1];
+                    $subexprstarts[] = (int)$facode[$i + 1];
                 } else if ($facode[$i] == 'e') {
-                    $subpattends[] = (int)$facode[$i + 1];
+                    $subexprends[] = (int)$facode[$i + 1];
                 } else {
                     $error = true;
                     echo "<BR><BR><BR>Incorrect fa code!<BR><BR><BR>";
-                    //TODO: correct error message
+                    // TODO: correct error message.
                 }
                 $i += 2;
             } while (!$error && $i < strlen($facode) && $facode[$i] != '#');
@@ -630,10 +622,10 @@ abstract class qtype_preg_finite_automaton {
         $trash =  new qtype_preg_fa_state();
         $transition = new qtype_preg_nfa_transition($trash, $leaf, $trash);
         $transition->tags = array();
-        foreach ($subpattstarts as $val) {
+        foreach ($subexprstarts as $val) {
             $transition->tags[] = $val * 2;
         }
-        foreach ($subpattends as $val) {
+        foreach ($subexprends as $val) {
             $transition->tags[] = $val * 2 + 1;
         }
         return $transition;
