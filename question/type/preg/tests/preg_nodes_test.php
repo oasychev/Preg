@@ -14,6 +14,8 @@ defined('MOODLE_INTERNAL') || die();
 global $CFG;
 require_once($CFG->dirroot . '/question/type/preg/preg_nodes.php');
 require_once($CFG->dirroot . '/question/type/preg/nfa_matcher/nfa_matcher.php');
+require_once($CFG->dirroot . '/question/type/poasquestion/stringstream/stringstream.php');
+require_once($CFG->dirroot . '/question/type/preg/preg_lexer.lex.php');
 
 class qtype_preg_nodes_test extends PHPUnit_Framework_TestCase {
 
@@ -360,7 +362,7 @@ class qtype_preg_nodes_test extends PHPUnit_Framework_TestCase {
         $node = $root->node_by_regex_fragment(28, 28, $idcounter);
         $this->assertTrue($node->type == qtype_preg_node::TYPE_NODE_ALT);
     }
-
+    
     function test_node_by_regex_fragment_emptiness() {
         $handler = new qtype_preg_regex_handler("a|b|");
         $idcounter = 1000;
@@ -428,5 +430,284 @@ class qtype_preg_nodes_test extends PHPUnit_Framework_TestCase {
         $this->assertTrue($node->type == qtype_preg_node::TYPE_NODE_ALT && $node->position->indfirst == 2 && $node->position->indlast == 3);
         $this->assertTrue($node->operands[0]->flags[0][0]->data == 'b');
         $this->assertTrue($node->operands[1]->subtype == qtype_preg_leaf_meta::SUBTYPE_EMPTY);
+    }
+}
+
+class qtype_preg_match_test extends PHPUnit_Framework_TestCase {
+    function create_lexer($regex, $options = null) {
+        if ($options === null) {
+            $options = new qtype_preg_handling_options();
+            $options->preserveallnodes = true;
+        }
+        StringStreamController::createRef('regex', $regex);
+        $pseudofile = fopen('string://regex', 'r');
+        $lexer = new qtype_preg_lexer($pseudofile);
+        $lexer->set_options($options);
+        return $lexer;
+    }
+
+    function test_string_ends() {
+        $str = new qtype_poasquestion_string("a\n");
+        $length = 0;
+        $lexer = $this->create_lexer("[ab\n]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsafter[] = $assert;
+        $pos = 1;
+        $a = $leaf->match($str, $pos, $length);
+        $this->assertTrue($a, 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 1, 'Return length is not equal to expected');
+    }
+
+    function test_character_with_circumflex() {
+        $str = new qtype_poasquestion_string("ab\n");
+        $length = 0;
+        $lexer = $this->create_lexer("[ab]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsafter[] = $assert;
+        $pos = 0;
+        $this->assertFalse($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 0, 'Return length is not equal to expected');
+    }
+
+    function test_string_ends_dollar_assert() {
+        $str = new qtype_poasquestion_string("ab\na\nas");
+        $length = 0;
+        $lexer = $this->create_lexer("[ab\n]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_dollar;
+        $leaf->assertionsbefore[] = $assert;
+        $pos = 2;
+        $this->assertTrue($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 1, 'Return length is not equal to expected');
+    }
+
+    function test_character_with_dollar() {
+        $str = new qtype_poasquestion_string("ab\na\nas");
+        $length = 0;
+        $lexer = $this->create_lexer("[ab]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_dollar;
+        $leaf->assertionsbefore[] = $assert;
+        $pos = 2;
+        $this->assertFalse($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 0, 'Return length is not equal to expected');
+    }
+
+    function test_one_string() {
+        $str = new qtype_poasquestion_string("ab");
+        $length = 0;
+        $lexer = $this->create_lexer("[a]");
+        $leaf = $lexer->nextToken()->value;
+        $pos = 0;
+        $this->assertTrue($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 1, 'Return length is not equal to expected');
+    }
+
+    function test_single_assert() {
+        $str = new qtype_poasquestion_string("ab\na\nas");
+        $length = 0;
+        $leaf= new qtype_preg_leaf_assert_circumflex;
+        $pos = 0;
+        $this->assertTrue($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 0, 'Return length is not equal to expected');
+    }
+
+    function test_before_and_after_asserts_true() {
+        $str = new qtype_poasquestion_string("ab\na\nas");
+        $length = 0;
+        $lexer = $this->create_lexer("[ab\n]");
+        $leaf = $lexer->nextToken()->value;
+        $assert1 = new qtype_preg_leaf_assert_dollar;
+        $assert2 = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsbefore[] = $assert1;
+        $leaf->assertionsafter[] = $assert2;
+        $pos = 2;
+        $this->assertTrue($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 1, 'Return length is not equal to expected');
+    }
+
+    function test_before_and_after_asserts_false() {
+        $str = new qtype_poasquestion_string("ab\na\nas");
+        $length = 0;
+        $lexer = $this->create_lexer("[ab]");
+        $leaf = $lexer->nextToken()->value;
+        $assert1 = new qtype_preg_leaf_assert_dollar;
+        $assert2 = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsbefore[] = $assert1;
+        $leaf->assertionsafter[] = $assert2;
+        $pos = 2;
+        $this->assertFalse($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 0, 'Return length is not equal to expected');
+    }
+
+    function test_empty_string_true() {
+        $str = new qtype_poasquestion_string("ab\n\nas");
+        $length = 0;
+        $lexer = $this->create_lexer("[a-z\n]");
+        $leaf = $lexer->nextToken()->value;
+        $assert1 = new qtype_preg_leaf_assert_dollar;
+        $assert2 = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsbefore[] = $assert1;
+        $leaf->assertionsafter[] = $assert2;
+        $pos = 3;
+        $this->assertTrue($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 1, 'Return length is not equal to expected');
+    }
+
+    function test_empty_string_false() {
+        $str = new qtype_poasquestion_string("ab\n\nas");
+        $length = 0;
+        $lexer = $this->create_lexer("[a-z]");
+        $leaf = $lexer->nextToken()->value;
+        $assert1 = new qtype_preg_leaf_assert_dollar;
+        $assert2 = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsbefore[] = $assert1;
+        $leaf->assertionsafter[] = $assert2;
+        $pos = 3;
+        $this->assertFalse($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 0, 'Return length is not equal to expected');
+    }
+
+    function test_single_dollar_in_the_end() {
+        $str = new qtype_poasquestion_string("ab\n\nas");
+        $length = 0;
+        $leaf = new qtype_preg_leaf_assert_dollar;
+        $pos = 6;
+        $this->assertTrue($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 0, 'Return length is not equal to expected');
+    }
+
+    function test_middle_of_the_string() {
+        $str = new qtype_poasquestion_string("bcd");
+        $length = 0;
+        $lexer = $this->create_lexer("[a-c\n]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsafter[] = $assert;
+        $pos = 1;
+        $this->assertFalse($leaf->match($str, $pos, $length), 'Return boolean flag is not equal to expected');
+        $this->assertEquals($length, 0, 'Return length is not equal to expected');
+    }
+}
+
+class qtype_preg_next_character_test extends PHPUnit_Framework_TestCase {
+    function create_lexer($regex, $options = null) {
+        if ($options === null) {
+            $options = new qtype_preg_handling_options();
+            $options->preserveallnodes = true;
+        }
+        StringStreamController::createRef('regex', $regex);
+        $pseudofile = fopen('string://regex', 'r');
+        $lexer = new qtype_preg_lexer($pseudofile);
+        $lexer->set_options($options);
+        return $lexer;
+    }
+
+    function test_empty_string() {
+        $str = new qtype_poasquestion_string("ax");
+        $length = 1;
+        $lexer = $this->create_lexer("[ab\n]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsafter[] = $assert;
+        $pos = 1;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), "\n", 'Return character is not equal to expected');
+    }
+
+    function test_string_ends_false() {
+        $str = new qtype_poasquestion_string("b\n");
+        $length = 1;
+        $lexer = $this->create_lexer("[ab]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsafter[] = $assert;
+        $pos = 1;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), qtype_preg_leaf::NEXT_CHAR_CANNOT_GENERATE, 'Return character is not equal to expected');
+    }
+
+    function test_string_ends_dollar_assert() {
+        $str = new qtype_poasquestion_string("bx\na\nas");
+        $length = 2;
+        $lexer = $this->create_lexer("[ab\n]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_dollar;
+        $leaf->assertionsbefore[] = $assert;
+        $pos = 2;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), "\n", 'Return character is not equal to expected');
+    }
+
+    function test_character_with_dollar() {
+        $str = new qtype_poasquestion_string("b\na\nas");
+        $length = 1;
+        $lexer = $this->create_lexer("[ab]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_dollar;
+        $leaf->assertionsbefore[] = $assert;
+        $pos = 1;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), qtype_preg_leaf::NEXT_CHAR_CANNOT_GENERATE, 'Return character is not equal to expected');
+    }
+
+    function test_one_string() {
+        $str = new qtype_poasquestion_string("ab");
+        $length = 1;
+        $lexer = $this->create_lexer("[x-z]");
+        $leaf = $lexer->nextToken()->value;
+        $pos = 1;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), 'x', 'Return character is not equal to expected');
+    }
+
+    function test_single_assert() {
+        $str = new qtype_poasquestion_string("\n\nas");
+        $length = 0;
+        $leaf = new qtype_preg_leaf_assert_circumflex;
+        $pos = 0;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), qtype_preg_leaf::NEXT_CHAR_NOT_NEEDED, 'Return character is not equal to expected');
+    }
+
+    function test_before_and_after_asserts_false() {
+        $str = new qtype_poasquestion_string("a\na\nas");
+        $length = 1;
+        $lexer = $this->create_lexer("[ab]");
+        $leaf = $lexer->nextToken()->value;
+        $assert1 = new qtype_preg_leaf_assert_dollar;
+        $assert2 = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsbefore[] = $assert1;
+        $leaf->assertionsafter[] = $assert2;
+        $pos = 1;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), qtype_preg_leaf::NEXT_CHAR_CANNOT_GENERATE, 'Return character is not equal to expected');
+    }
+
+    function test_before_and_after_asserts_true() {
+        $str = new qtype_poasquestion_string("abcd\nas");
+        $length = 1;
+        $lexer = $this->create_lexer("[a-z\n]");
+        $leaf = $lexer->nextToken()->value;
+        $assert1 = new qtype_preg_leaf_assert_dollar;
+        $assert2 = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsbefore[] = $assert1;
+        $leaf->assertionsafter[] = $assert2;
+        $pos = 1;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), "\n", 'Return character is not equal to expected');
+    }
+
+    function test_single_dollar_in_the_end() {
+        $str = new qtype_poasquestion_string("as");
+        $length = 2;
+        $leaf = new qtype_preg_leaf_assert_dollar;
+        $pos = 2;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), qtype_preg_leaf::NEXT_CHAR_END_HERE, 'Return character is not equal to expected');
+    }
+
+    function test_middle_of_the_string() {
+        $str = new qtype_poasquestion_string("bcd");
+        $length = 1;
+        $lexer = $this->create_lexer("[c\n]");
+        $leaf = $lexer->nextToken()->value;
+        $assert = new qtype_preg_leaf_assert_circumflex;
+        $leaf->assertionsafter[] = $assert;
+        $pos = 1;
+        $this->assertEquals($leaf->next_character($str, $pos, $length), "\n", 'Return character is not equal to expected');
     }
 }
