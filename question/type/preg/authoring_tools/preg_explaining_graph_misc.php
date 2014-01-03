@@ -233,12 +233,17 @@ class qtype_preg_explaining_graph_tool_subgraph {
                 // If neighbor is simple node with text too and it's a child of the same subgraph,
                 // then we need to join this two nodes.
                 if ($neighbor !== null and $neighbor->type == qtype_preg_explaining_graph_tool_node::TYPE_SIMPLE && $neighbor->owner === $this) {
+
+                    $ids_this = explode(',', $tmpdnode->id);
+                    $ids_neighbor = explode(',', $neighbor->id);
+                    $ids_new = $ids_this[0] . ',' . $ids_this[1] . ',' . ($ids_neighbor[2]);
+
                     // Create the new joined node.
                     $tmp = new qtype_preg_explaining_graph_tool_node(
                                 array($tmpdnode->label[0] . $neighbor->label[0]),
                                 $neighbor->shape,
                                 $neighbor->color,
-                                $this, $tmpdnode->id,
+                                $this, $ids_new,
                                 $tmpdnode->style,
                                 $tmpdnode->fillcolor
                             );
@@ -530,19 +535,20 @@ class qtype_preg_explaining_graph_tool_subgraph {
      */
     public function create_dot() {
         $this->regenerate_id();
-        $instr = "digraph {\n" .
+        $instr = "digraph qtype_preg_graph {\n" .
                   "compound=true;\n" .
                   "rankdir = LR;\n" . ($this->isexact ? 'graph [bgcolor=lightgray];' : '') . "\n";
 
         foreach ($this->nodes as $iter) {
             if ($iter->shape == 'record') {
-                $instr .= '"nd' .$iter->id . '" [shape=' . $iter->shape . ', color=' . $iter->color .
-                    ', label=' . $this->compute_html($iter->label, $iter->invert) . ', fillcolor=' . $iter->fillcolor . "];\n";
+                $instr .= '"nd' . $iter->id . '" [shape=' . $iter->shape . ', color=' . $iter->color . ',id="' . $iter->id .
+                    '", label=' . $this->compute_html($iter->label, $iter->invert) . ', fillcolor=' . $iter->fillcolor .
+                    ',tooltip="character class"' ."];\n";
             } else {
-                $instr .= '"nd' . $iter->id . '" [shape=' . $iter->shape . ', ' .
-                    'color=' . $iter->color . ', ' . 'style=' . $iter->style . ', ' .
+                $instr .= '"nd' . $iter->id . '" [shape=' . $iter->shape . ', ' . 'id="' . $iter->id .
+                    '", color=' . $iter->color . ', ' . 'style=' . $iter->style . ', ' .
                     'label="' . str_replace(chr(10), '', qtype_preg_authoring_tool::string_to_html($iter->label[0])) . '"' .
-                    ', fillcolor=' . $iter->fillcolor . "];\n";
+                    ', fillcolor=' . $iter->fillcolor . ',tooltip="'.str_replace(chr(10), '', qtype_preg_authoring_tool::string_to_html($iter->label[0])).'"' ."];\n";
             }
         }
 
@@ -621,13 +627,13 @@ class qtype_preg_explaining_graph_tool_subgraph {
 
         foreach ($gr->nodes as $iter) {
             if ($iter->shape == 'record') {
-                $instr .= '"nd' .$iter->id . '" [shape=' . $iter->shape . ', color=' . $iter->color .
-                    ', label=' . $this->compute_html($iter->label, $iter->invert) . ', fillcolor=' . $iter->fillcolor . "];\n";
+                $instr .= '"nd' .$iter->id . '" [shape=' . $iter->shape . ', color=' . $iter->color . ',id="' . $iter->id .
+                    '", label=' . $this->compute_html($iter->label, $iter->invert) . ', fillcolor=' . $iter->fillcolor .',tooltip="character class"' ."];\n";
             } else {
-                $instr .= '"nd' . $iter->id . '" [shape=' . $iter->shape . ', ' .
-                    'color=' . $iter->color . ', ' . 'style=' . $iter->style . ', ' .
+                $instr .= '"nd' . $iter->id . '" [shape=' . $iter->shape . ', ' . 'id="' . $iter->id .
+                    '",color=' . $iter->color . ', ' . 'style=' . $iter->style . ', ' .
                     'label="' . str_replace(chr(10), '', qtype_preg_authoring_tool::string_to_html($iter->label[0])) . '"' .
-                    ', fillcolor=' . $iter->fillcolor . "];\n";
+                    ', fillcolor=' . $iter->fillcolor . ',tooltip="'.str_replace(chr(10), '', qtype_preg_authoring_tool::string_to_html($iter->label[0])).'"' ."];\n";
             }
         }
 
@@ -650,7 +656,12 @@ class qtype_preg_explaining_graph_tool_subgraph {
     private function find_max_id() {
         $maxid = -1;
         foreach ($this->nodes as $node) {
-            $maxid = max($maxid, $node->id);
+            $id = $node->id;
+            if (is_string($id)) {
+                $temp = explode(',', $id);
+                $id = (int)$temp[0];
+            }
+            $maxid = max($maxid, $id);
         }
 
         foreach ($this->subgraphs as $subgraph) {
@@ -670,8 +681,10 @@ class qtype_preg_explaining_graph_tool_subgraph {
         $maxid = $maxid == -1 ? $this->find_max_id() : $maxid;
 
         foreach ($this->nodes as $node) {
-            if ($node->id == -1) {
-                $node->id = ++$maxid;
+            if (!is_string($node->id)) {
+                if ($node->id == -1) {
+                    $node->id = ++$maxid;
+                }
             }
         }
 
