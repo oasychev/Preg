@@ -24,7 +24,7 @@ $string['activesessionsstudenttitle']           = 'You have {$a} active session(
 $string['nosessionsstudenttitle']               = 'You don\'t have any active session...';
 
 
-// Capabilities description
+// Capabilities description.
 $string['supervised:addinstance']               = 'Add a new Supervised block';
 $string['supervised:besupervised']              = 'Student access mode';
 $string['supervised:supervise']                 = 'For own sessions: start planned, start new, edit active, finish active, view logs.';
@@ -134,7 +134,7 @@ $string['sessionstartsafter']       = 'Session starts after';
 $string['sessionendsbefore']        = 'Session ends before';
 $string['timetovalidationerror']    = 'Session\'s end must be greater or equal session\'s start.';
 $string['enrollteacher']            = 'For plane session you must enroll at least one teacher to course!';
-$string['createclassroom']          = 'For plane session you must create (or make visible) at least one classroom!';
+$string['createclassroom']          = 'For plane/start session you must create (or make visible) at least one classroom!';
 $string['gotoenrollment']           = 'Go to user enrollment page';
 $string['gotoclassrooms']           = 'Go to classrooms page';
 

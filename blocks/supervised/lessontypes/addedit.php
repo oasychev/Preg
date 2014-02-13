@@ -1,15 +1,31 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+
 require_once('../../../config.php');
 
 $courseid   = required_param('courseid', PARAM_INT);
-$id         = optional_param('id', '', PARAM_INT);        // lessontype id (only for edit mode)
+$id         = optional_param('id', '', PARAM_INT);        // Lessontype id (only for edit mode).
 $site = get_site();
 
 if (!$course = $DB->get_record('course', array('id' => $courseid))) {
     print_error("invalidcourseid");
 }
 if ($site->id == $course->id) {
-    // block can not work in the main course (frontpage)
+    // Block can not work in the main course (frontpage).
     print_error("invalidcourseid");
 }
 
@@ -17,22 +33,22 @@ require_login($course);
 require_capability('block/supervised:editlessontypes', $PAGE->context);
 $PAGE->set_url('/blocks/supervised/lessontypes/addedit.php', array('courseid' => $courseid));
 $PAGE->set_pagelayout('standard');
-include("breadcrumbs.php");
+require("breadcrumbs.php");
 
 
 // Initializing variables depending of mode.
-if(!$id){   // Add mode.
+if (!$id) {   // Add mode.
     $PAGE->navbar->add(get_string("addlessontypenavbar", 'block_supervised'));
     $title = get_string('addlessontypepagetitle', 'block_supervised');
     $heading = get_string("addingnewlessontype", 'block_supervised');
-} else{     // Edit mode.
-    if (! $lessontype = $DB->get_record("block_supervised_lessontype", array("id"=>$id, "courseid"=>$courseid))) {
+} else {     // Edit mode.
+    if (! $lessontype = $DB->get_record("block_supervised_lessontype", array("id" => $id, "courseid" => $courseid))) {
         print_error(get_string("invalidlessontypeid", 'block_supervised'));
     }
     $PAGE->navbar->add(get_string("editlessontypenavbar", 'block_supervised'));
     $title = get_string('editlessontypepagetitle', 'block_supervised');
     $heading = get_string("editinglessontype", 'block_supervised');
-    
+
     $toform['id']   = $lessontype->id;
     $toform['name'] = $lessontype->name;
 }
@@ -50,28 +66,31 @@ $mform = new addedit_lessontype_form();
 $toform['courseid'] = $courseid;
 $mform->set_data($toform);
 
-if($mform->is_cancelled()) {
+if ($mform->is_cancelled()) {
     // Cancelled forms redirect to the course main page.
     $url = new moodle_url('/blocks/supervised/lessontypes/view.php', array('courseid' => $courseid));
     redirect($url);
 } else if ($fromform = $mform->get_data()) {
     // Store the submitted data.
-    if(!$id){   // Add mode.
-        // TODO Logging
-        if (!$DB->insert_record('block_supervised_lessontype', $fromform)) {
+    if (!$id) {   // Add mode.
+        if (!$newid = $DB->insert_record('block_supervised_lessontype', $fromform)) {
             print_error('insertlessontypeerror', 'block_supervised');
         }
-    } else{     // Edit mode.
-        // TODO Logging
+        // TODO Logging.
+        add_to_log($COURSE->id, 'role', 'add lesson type',
+            "blocks/supervised/lessontypes/addedit.php?id={$newid}&courseid={$COURSE->id}", $fromform->name);
+    } else {     // Edit mode.
         if (!$DB->update_record('block_supervised_lessontype', $fromform)) {
             print_error('insertlessontypeerror', 'block_supervised');
         }
-
+        // TODO Logging.
+        add_to_log($COURSE->id, 'role', 'edit lesson type',
+            "blocks/supervised/lessontypes/addedit.php?id={$fromform->id}&courseid={$COURSE->id}", $fromform->name);
     }
     $url = new moodle_url('/blocks/supervised/lessontypes/view.php', array('courseid' => $courseid));
     redirect($url);
 } else {
-    // form didn't validate or this is the first display
+    // Form didn't validate or this is the first display.
     echo $OUTPUT->header();
     echo $OUTPUT->heading($heading, 2);
     $mform->display();
