@@ -144,8 +144,10 @@ M.preg_authoring_tools_script = (function ($) {
                     $('#id_tree_send_select').attr('disabled',true);
                     $('#id_graph_send_select').attr('disabled',true);
 
-                    $('#tree_hnd').css('width', $('#mformauthoring').prop('offsetWidth') - 37);
-                    $('#graph_hnd').css('width', $('#mformauthoring').prop('offsetWidth') - 37);
+                    // resize magic (alter for html-voodoo-bug-positioning-development)
+                    $( window ).resize(self.resize_handler);
+                    self.resize_handler();
+                    $(self.textbutton_widget.dialog).dialog( "option", "minWidth", "1000px" ); // TODO - should it be here?
 
                     self.panzooms.init();
                     options.oneachpresscallback();
@@ -202,8 +204,8 @@ M.preg_authoring_tools_script = (function ($) {
 
     btn_show_clicked : function (e) {
         e.preventDefault();
-        $('input[name=\'tree_fold_node_points\'').val('');
-        $('input[name=\'tree_selected_node_points\'').val('');
+        $('input[name=\'tree_fold_node_points\']').val('');
+        $('input[name=\'tree_selected_node_points\']').val('');
         var sel = self.get_selection();
         self.load_content(sel.indfirst, sel.indlast);
         self.load_strings(sel.indfirst, sel.indlast);
@@ -253,7 +255,7 @@ M.preg_authoring_tools_script = (function ($) {
                 indlast = tmp[2];
 
             if(self.is_tree_foldind_mode()) {
-                var points = $('input[name=\'tree_fold_node_points\'').val();
+                var points = $('input[name=\'tree_fold_node_points\']').val();
                 // if new point not contained
                 //if(points.split(',').indexOf(indfirst) == -1 || points.split(',').indexOf(indlast) == -1) {
                 if(points.indexOf(indfirst + ',' + indlast) == -1) {
@@ -272,10 +274,10 @@ M.preg_authoring_tools_script = (function ($) {
                         points = points.replace(indfirst + ',' + indlast, '');
                     }
                 }
-                $('input[name=\'tree_fold_node_points\'').val(points);
+                $('input[name=\'tree_fold_node_points\']').val(points);
 
-                if(typeof $('input[name=\'tree_selected_node_points\'').val() != 'undefined') {
-                    var tmpcoords = $('input[name=\'tree_selected_node_points\'').val().split(',');
+                if(typeof $('input[name=\'tree_selected_node_points\']').val() != 'undefined') {
+                    var tmpcoords = $('input[name=\'tree_selected_node_points\']').val().split(',');
                     indfirst = tmpcoords[0];
                     indlast = tmpcoords[1];
 
@@ -286,7 +288,7 @@ M.preg_authoring_tools_script = (function ($) {
                     self.load_strings();
                 }
             } else {
-                $('input[name=\'tree_selected_node_points\'').val(indfirst + ',' + indlast);
+                $('input[name=\'tree_selected_node_points\']').val(indfirst + ',' + indlast);
                 self.load_content(indfirst, indlast);
                 self.load_strings(indfirst, indlast);
             }
@@ -297,7 +299,7 @@ M.preg_authoring_tools_script = (function ($) {
         e.preventDefault();
         //if (!self.is_tree_selection_rectangle_visible()) {
         if(!self.is_tree_foldind_mode()) {
-            $('input[name=\'tree_selected_node_points\'').val('');
+            $('input[name=\'tree_selected_node_points\']').val('');
             self.load_content();
             self.load_strings();
         }
@@ -524,26 +526,26 @@ M.preg_authoring_tools_script = (function ($) {
             if(self.RECTANGLE_WIDTH < new_pageX && self.RECTANGLE_HEIGHT < new_pageY) {
                 $('#' + rectangle).css({
                     width : (new_pageX - self.RECTANGLE_WIDTH)-10,
-                    height : (new_pageY - self.RECTANGLE_HEIGHT)-10,
+                    height : (new_pageY - self.RECTANGLE_HEIGHT)-10
                 });
             } else if(self.RECTANGLE_WIDTH < new_pageX && self.RECTANGLE_HEIGHT > new_pageY) {
                 $('#' + rectangle).css({
                     width : (new_pageX - self.RECTANGLE_WIDTH)-10,
                     height : (self.RECTANGLE_HEIGHT - new_pageY)-10,
-                    top : new_pageY,
+                    top : new_pageY
                 });
             } else if(self.RECTANGLE_WIDTH > new_pageX && self.RECTANGLE_HEIGHT > new_pageY) {
                 $('#' + rectangle).css({
                     width : (self.RECTANGLE_WIDTH - new_pageX)-10,
                     height : (self.RECTANGLE_HEIGHT - new_pageY)-10,
                     top : new_pageY,
-                    left : new_pageX,
+                    left : new_pageX
                 });
             } else if(self.RECTANGLE_WIDTH > new_pageX && self.RECTANGLE_HEIGHT < new_pageY) {
                 $('#' + rectangle).css({
                     width : (self.RECTANGLE_WIDTH - new_pageX)-10,
                     height : (new_pageY - self.RECTANGLE_HEIGHT)-10,
-                    left : new_pageX,
+                    left : new_pageX
                 });
             }
         }
@@ -559,8 +561,8 @@ M.preg_authoring_tools_script = (function ($) {
                 maxHeight: (br.bottom - br.top),
                 minTop: (document.getElementById(hnd).getBoundingClientRect().left - document.getElementById(img).getBoundingClientRect().left),
                 minLeft: (document.getElementById(hnd).getBoundingClientRect().left - document.getElementById(img).getBoundingClientRect().left),
-                maxRight: br.right - br.left + (document.getElementById(hnd).getBoundingClientRect().left - document.getElementById(img).getBoundingClientRect().left),*/
-                maxBottom: br.bottom - br.top,
+                maxRight: br.right - br.left + (document.getElementById(hnd).getBoundingClientRect().left - document.getElementById(img).getBoundingClientRect().left),
+                maxBottom: br.bottom - br.top,*/
                 dragHandle: true,
                 onDrag: function(x, y) {
                     this.style.backgroundPosition = '-' + (x - 50) + 'px -' + (y - 50) + 'px';
@@ -589,7 +591,7 @@ M.preg_authoring_tools_script = (function ($) {
             height : 20,
             left : self.RECTANGLE_WIDTH,
             top : self.RECTANGLE_HEIGHT,
-            visibility : 'visible',
+            visibility : 'visible'
         });
     },
 
@@ -605,6 +607,37 @@ M.preg_authoring_tools_script = (function ($) {
         //var local_y = e.pageY - $(window).prop('scrollY') - br.top;
         return e.pageY - $(window).prop('scrollY') - document.getElementById(img).getBoundingClientRect().top 
                 - (document.getElementById(hnd).getBoundingClientRect().top - document.getElementById(img).getBoundingClientRect().top);
+    },
+
+    /**
+     * Detects a rectangle within polygon and adds a center point to it.
+     * @param area Area of map tag.
+     * @returns {boolean} Is polygon a rectangle?
+     */
+    detect_rect : function(area) {
+        // Get list of coordinates as integers.
+        var nodeCoords = area.coords.split(/[, ]/).map(function(item){return parseInt(item);});
+        // If it looks like a rectangle...
+        if (nodeCoords.length == 8) {
+            // Build a list of points for convenience.
+            var points = [];
+            for (var j = 0; j < nodeCoords.length; j += 2) {
+                points[points.length] = {x: nodeCoords[j], y: nodeCoords[j+1]};
+            }
+
+            // Calculate a center point of rectangle.
+            var center = {
+                x: Math.floor(points[0].x + (points[2].x - points[0].x)/2),
+                y: Math.floor(points[0].y + (points[2].y - points[0].y)/2)
+            };
+
+            // Add a center point to coordinates of area.
+            area.coords += ',' + center.x + ',' + center.y;
+
+            return true;
+        } else {
+            return false;
+        }
     },
 
     get_rect_selection : function (e, rectangle, img, area, deltaX, deltaY) {
@@ -626,8 +659,12 @@ M.preg_authoring_tools_script = (function ($) {
                     nodeCoords[0], nodeCoords[1],
                     nodeCoords[2], nodeCoords[1],
                     nodeCoords[0], nodeCoords[3],
-                    nodeCoords[2], nodeCoords[3]
+                    nodeCoords[2], nodeCoords[3],
+                    String(Math.min(nodeCoords[0], nodeCoords[2]) + Math.abs(nodeCoords[0]-nodeCoords[2])/2),
+                    String(Math.min(nodeCoords[1], nodeCoords[3]) + Math.abs(nodeCoords[1]-nodeCoords[3])/2)
                 ];
+            } else if (areas[i].shape == "poly") {
+                if (self.detect_rect(areas[i])) nodeCoords = areas[i].coords.split(/[, ]/);
             }
             var coords = [];
             for (var j = 0; j < nodeCoords.length; j += 2) {
@@ -691,7 +728,7 @@ M.preg_authoring_tools_script = (function ($) {
             width : 0,
             height : 0,
             left : -10,
-            top : -10,
+            top : -10
         });
     },
 
@@ -730,7 +767,7 @@ M.preg_authoring_tools_script = (function ($) {
                 width : 0,
                 height : 0,
                 left : -10,
-                top : -10,
+                top : -10
             });
         }
     },
@@ -766,7 +803,7 @@ M.preg_authoring_tools_script = (function ($) {
                 indlast: indlast,
                 treeorientation: self.get_orientation(),
                 displayas: self.get_displayas(),
-                foldcoords: $('input[name=\'tree_fold_node_points\'').val(),
+                foldcoords: $('input[name=\'tree_fold_node_points\']').val(),
                 treeisfold: $("#id_tree_folding_mode").is(':checked') ? 1 : 0,
                 ajax: true
             },
@@ -826,6 +863,11 @@ M.preg_authoring_tools_script = (function ($) {
 
     get_displayas : function () {
         return $('#fgroup_id_charset_process_radioset input:checked').val();
+    },
+
+    resize_handler : function() {
+        $('#tree_hnd').css('width', $('#mformauthoring').prop('offsetWidth') - 37);
+        $('#graph_hnd').css('width', $('#mformauthoring').prop('offsetWidth') - 37);
     },
 
     panzooms : {
