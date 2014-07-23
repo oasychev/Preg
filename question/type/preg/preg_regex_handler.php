@@ -42,30 +42,49 @@ class qtype_preg_handling_options {
     const MODE_PCRE = 0;
     const MODE_POSIX = 1;
 
-    const MODIFIER_ANCHORED            = 0x000001;  // A // the pattern is forced to be anchored.
-    // const MODIFIER_AUTO_CALLOUT      = 0x000002;
-    const MODIFIER_BSR_ANYCRLF         = 0x000004;  //   // \R matches CR, LF, or CRLF.
-    const MODIFIER_BSR_UNICODE         = 0x000008;  //   // \R matches any Unicode newline sequence.
-    const MODIFIER_CASELESS            = 0x000010;  // i // case insensitive match.
-    const MODIFIER_DOLLAR_ENDONLY      = 0x000020;  // D // dollar metacharacter matches only at the end of the subject string.
-    const MODIFIER_DOTALL              = 0x000040;  // s // dot matches newlines.
-    const MODIFIER_DUPNAMES            = 0x000080;  // J // names used to identify capturing subpatterns need not be unique.
-    const MODIFIER_EXTENDED            = 0x000100;  // x // ignore white spaces.
-    // const MODIFIER_EXTRA             = 0x000200;  // X //
-    // const MODIFIER_FIRSTLINE         = 0x000400;
-    // const MODIFIER_JAVASCRIPT_COMPAT = 0x000800;
-    const MODIFIER_MULTILINE           = 0x001000;  // m // multiple lines match.
-    const MODIFIER_NEWLINE_CR          = 0x002000;  //   // newline is indicated by CR.
-    const MODIFIER_NEWLINE_LF          = 0x004000;  //   // newline is indicated by LF.
-    const MODIFIER_NEWLINE_CRLF        = 0x008000;  //   // newline is indicated by CRLF.
-    const MODIFIER_NEWLINE_ANYCRLF     = 0x010000;  //   // newline is indicated by CR, LF or CRLF.
-    const MODIFIER_NEWLINE_ANY         = 0x020000;  //   // newline is indicated by any Unicode newline sequence.
-    // const MODIFIER_NO_AUTO_CAPTURE   = 0x040000;
-    // const MODIFIER_NO_START_OPTIMIZE = 0x080000;
-    // const MODIFIER_UCP               = 0x100000;
-    const MODIFIER_UNGREEDY            = 0x200000;  // U // inverts the greediness of the quantifiers.
-    const MODIFIER_UTF8                = 0x400000;  // u // regard both the pattern and the subject as UTF-8 strings.
-    // const MODIFIER_NO_UTF8_CHECK     = 0x800000;
+    const MODIFIER_CASELESS           = 0x00000001;  // i // case insensitive match.
+    const MODIFIER_MULTILINE          = 0x00000002;  // m // multiple lines match.
+    const MODIFIER_DOTALL             = 0x00000004;  // s // dot matches newlines.
+    const MODIFIER_EXTENDED           = 0x00000008;  // x // ignore white spaces.
+    const MODIFIER_ANCHORED           = 0x00000010;  // A // the pattern is forced to be anchored.
+    const MODIFIER_DOLLAR_ENDONLY     = 0x00000020;  // D // dollar metacharacter matches only at the end of the subject string.
+    const MODIFIER_EXTRA              = 0x00000040;  // X //
+    const MODIFIER_NOTBOL             = 0x00000080;
+    const MODIFIER_NOTEOL             = 0x00000100;
+    const MODIFIER_UNGREEDY           = 0x00000200;  // U // inverts the greediness of the quantifiers.
+    //const MODIFIER_NOTEMPTY           = 0x00000400;
+    const MODIFIER_UTF8               = 0x00000800;  // u // regard both the pattern and the subject as UTF-8 strings.
+    //const MODIFIER_UTF16              = 0x00000800;
+    //const MODIFIER_UTF32              = 0x00000800;
+    //const MODIFIER_NO_AUTO_CAPTURE    = 0x00001000;
+    //const MODIFIER_NO_UTF8_CHECK      = 0x00002000;
+    //const MODIFIER_NO_UTF16_CHECK     = 0x00002000;
+    //const MODIFIER_NO_UTF32_CHECK     = 0x00002000;
+    //const MODIFIER_AUTO_CALLOUT       = 0x00004000;
+    //const MODIFIER_PARTIAL_SOFT       = 0x00008000;
+    //const MODIFIER_PARTIAL            = 0x00008000;
+
+    //const MODIFIER_NEVER_UTF          = 0x00010000;
+    //const MODIFIER_DFA_SHORTEST       = 0x00010000;
+
+    //const MODIFIER_NO_AUTO_POSSESS    = 0x00020000;
+    //const MODIFIER_DFA_RESTART        = 0x00020000;
+
+    //const MODIFIER_FIRSTLINE          = 0x00040000;
+    const MODIFIER_DUPNAMES           = 0x00080000;  // J // names used to identify capturing subpatterns need not be unique.
+    const MODIFIER_NEWLINE_CR         = 0x00100000;  //   // newline is indicated by CR.
+    const MODIFIER_NEWLINE_LF         = 0x00200000;  //   // newline is indicated by LF.
+    const MODIFIER_NEWLINE_CRLF       = 0x00300000;  //   // newline is indicated by CRLF.
+    const MODIFIER_NEWLINE_ANY        = 0x00400000;  //   // newline is indicated by any Unicode newline sequence.
+    const MODIFIER_NEWLINE_ANYCRLF    = 0x00500000;  //   // newline is indicated by CR, LF or CRLF.
+    const MODIFIER_BSR_ANYCRLF        = 0x00800000;  //   // \R matches CR, LF, or CRLF.
+    const MODIFIER_BSR_UNICODE        = 0x01000000;  //   // \R matches any Unicode newline sequence.
+    //const MODIFIER_JAVASCRIPT_COMPAT  = 0x02000000;
+    //const MODIFIER_NO_START_OPTIMIZE  = 0x04000000;
+    //const MODIFIER_NO_START_OPTIMISE  = 0x04000000;
+    //const MODIFIER_PARTIAL_HARD       = 0x08000000;
+    //const MODIFIER_NOTEMPTY_ATSTART   = 0x10000000;
+    //const MODIFIER_UCP                = 0x20000000;
 
     /** @var boolean Regex compatibility mode. */
     public $mode = self::MODE_PCRE;
@@ -87,55 +106,74 @@ class qtype_preg_handling_options {
     public $selection = null;
 
     public static function get_all_modifiers() {
-        return array(self::MODIFIER_ANCHORED,
-                     // self::MODIFIER_AUTO_CALLOUT,
-                     self::MODIFIER_BSR_ANYCRLF,
-                     self::MODIFIER_BSR_UNICODE,
-                     self::MODIFIER_CASELESS,
-                     self::MODIFIER_DOLLAR_ENDONLY,
-                     self::MODIFIER_DOTALL,
-                     self::MODIFIER_DUPNAMES,
-                     self::MODIFIER_EXTENDED,
-                     // self::MODIFIER_EXTRA,
-                     // self::MODIFIER_FIRSTLINE,
-                     // self::MODIFIER_JAVASCRIPT_COMPAT,
+        return array(self::MODIFIER_CASELESS,
                      self::MODIFIER_MULTILINE,
+                     self::MODIFIER_DOTALL,
+                     self::MODIFIER_EXTENDED,
+                     self::MODIFIER_ANCHORED,
+                     self::MODIFIER_DOLLAR_ENDONLY,
+                     self::MODIFIER_EXTRA,
+                     self::MODIFIER_NOTBOL,
+                     self::MODIFIER_NOTEOL,
+                     self::MODIFIER_UNGREEDY,
+                     //self::MODIFIER_NOTEMPTY,
+                     self::MODIFIER_UTF8,
+                     //self::MODIFIER_UTF16,
+                     //self::MODIFIER_UTF32,
+                     //self::MODIFIER_NO_AUTO_CAPTURE,
+                     //self::MODIFIER_NO_UTF8_CHECK,
+                     //self::MODIFIER_NO_UTF16_CHECK,
+                     //self::MODIFIER_NO_UTF32_CHECK,
+                     //self::MODIFIER_AUTO_CALLOUT,
+                     //self::MODIFIER_PARTIAL_SOFT,
+                     //self::MODIFIER_PARTIAL,
+
+                     //self::MODIFIER_NEVER_UTF,
+                     //self::MODIFIER_DFA_SHORTEST,
+
+                     //self::MODIFIER_NO_AUTO_POSSESS,
+                     //self::MODIFIER_DFA_RESTART,
+
+                     //self::MODIFIER_FIRSTLINE,
+                     self::MODIFIER_DUPNAMES,
                      self::MODIFIER_NEWLINE_CR,
                      self::MODIFIER_NEWLINE_LF,
                      self::MODIFIER_NEWLINE_CRLF,
-                     self::MODIFIER_NEWLINE_ANYCRLF,
                      self::MODIFIER_NEWLINE_ANY,
-                     // self::MODIFIER_NO_AUTO_CAPTURE,
-                     // self::MODIFIER_NO_START_OPTIMIZE,
-                     // self::MODIFIER_UCP,
-                     self::MODIFIER_UNGREEDY,
-                     self::MODIFIER_UTF8,
-                     // self::MODIFIER_NO_UTF8_CHECK
+                     self::MODIFIER_NEWLINE_ANYCRLF,
+                     self::MODIFIER_BSR_ANYCRLF,
+                     self::MODIFIER_BSR_UNICODE,
+                     //self::MODIFIER_JAVASCRIPT_COMPAT,
+                     //self::MODIFIER_NO_START_OPTIMIZE,
+                     //self::MODIFIER_NO_START_OPTIMISE,
+                     //self::MODIFIER_PARTIAL_HARD,
+                     //self::MODIFIER_NOTEMPTY_ATSTART,
+                     //self::MODIFIER_UCP
                      );
     }
 
     public static function char_to_modifier($char) {
         switch ($char) {
-        case 'A':
-            return self::MODIFIER_ANCHORED;
         case 'i':
             return self::MODIFIER_CASELESS;
-        case 'D':
-            return self::MODIFIER_DOLLAR_ENDONLY;
-        case 's':
-            return self::MODIFIER_DOTALL;
-        case 'J':
-            return self::MODIFIER_DUPNAMES;
-        case 'x':
-            return self::MODIFIER_EXTENDED;
-        //case 'X':
-        //    return self::MODIFIER_EXTRA;
         case 'm':
             return self::MODIFIER_MULTILINE;
+        case 's':
+            return self::MODIFIER_DOTALL;
+        case 'x':
+            return self::MODIFIER_EXTENDED;
+        case 'A':
+            return self::MODIFIER_ANCHORED;
+        case 'D':
+            return self::MODIFIER_DOLLAR_ENDONLY;
+        case 'X':
+            return self::MODIFIER_EXTRA;
         case 'U':
             return self::MODIFIER_UNGREEDY;
         case 'u':
             return self::MODIFIER_UTF8;
+        case 'J':
+            return self::MODIFIER_DUPNAMES;
         default:
             return 0;
         }
@@ -143,41 +181,26 @@ class qtype_preg_handling_options {
 
     public static function modifier_to_char($mod) {
         switch ($mod) {
-        case self::MODIFIER_ANCHORED:
-            return 'A';
-        // case self::MODIFIER_AUTO_CALLOUT:
-        case self::MODIFIER_BSR_ANYCRLF:
-        case self::MODIFIER_BSR_UNICODE:
-            return '';
         case self::MODIFIER_CASELESS:
             return 'i';
-        case self::MODIFIER_DOLLAR_ENDONLY:
-            return 'D';
-        case self::MODIFIER_DOTALL:
-            return 's';
-        case self::MODIFIER_DUPNAMES:
-            return 'J';
-        case self::MODIFIER_EXTENDED:
-            return 'x';
-        // case self::MODIFIER_EXTRA:
-        //    return 'X';
-        // case self::MODIFIER_FIRSTLINE:
-        // case self::MODIFIER_JAVASCRIPT_COMPAT:
         case self::MODIFIER_MULTILINE:
             return 'm';
-        case self::MODIFIER_NEWLINE_CR:
-        case self::MODIFIER_NEWLINE_LF:
-        case self::MODIFIER_NEWLINE_CRLF:
-        case self::MODIFIER_NEWLINE_ANYCRLF:
-        case self::MODIFIER_NEWLINE_ANY:
-        // case self::MODIFIER_NO_AUTO_CAPTURE:
-        // case self::MODIFIER_NO_START_OPTIMIZE:
-        // case self::MODIFIER_UCP:
+        case self::MODIFIER_DOTALL:
+            return 's';
+        case self::MODIFIER_EXTENDED:
+            return 'x';
+        case self::MODIFIER_ANCHORED:
+            return 'A';
+        case self::MODIFIER_DOLLAR_ENDONLY:
+            return 'D';
+        case self::MODIFIER_EXTRA:
+            return 'X';
         case self::MODIFIER_UNGREEDY:
             return 'U';
         case self::MODIFIER_UTF8:
             return 'u';
-        // case self::MODIFIER_NO_UTF8_CHECK:
+        case self::MODIFIER_DUPNAMES:
+            return 'J';
         default:
             return '';
         }
@@ -211,7 +234,7 @@ class qtype_preg_handling_options {
     }
 
     public function is_modifier_set($modifier) {
-        return ($this->modifiers & $modifier) == 0 ? false : true;
+        return ($this->modifiers & $modifier) != 0;
     }
 }
 
@@ -228,9 +251,9 @@ class qtype_preg_regex_handler {
     /** Regex parser. */
     protected $parser = null;
     /** The root of the regex abstract syntax tree, consists of qtype_preg_node childs. */
-    protected $ast_root = null;
+    protected $astroot = null;
     /** The root of the regex definite syntax tree, consists of xxx_preg_node childs where xxx is engine name. */
-    protected $dst_root = null;
+    protected $dstroot = null;
     /** Array of error nodes generated by lexer or parser. */
     protected $errornodes = array();
     /** The error objects array. */
@@ -336,7 +359,7 @@ class qtype_preg_regex_handler {
 
     /**
      * Was there an error in regex?
-     * @return bool  errors exists.
+     * @return bool errors exists.
      */
     public function errors_exist() {
         return count($this->get_errors()) > 0;
@@ -356,17 +379,17 @@ class qtype_preg_regex_handler {
 
     /**
      * Returns error messages for regex.
-     * @param limit bool limit error messages to the admin option
+     * @param string $limit configuration field name for the maximum number of shown messages.
      * @return array of error messages.
      */
-    public function get_error_messages($limit = false) {
+    public function get_error_messages($limit = 'qtype_preg_maxerrorsshown') {
         global $CFG;
         $res = array();
         $maxerrors = 5;
         if ($limit) {
             // Determine maximum number of errors to show.
-            if (isset($CFG->qtype_preg_maxerrorsshown)) {
-                $maxerrors = $CFG->qtype_preg_maxerrorsshown;
+            if (isset($CFG->$limit)) {
+                $maxerrors = $CFG->$limit;
             }
         }
         $i = 0;
@@ -387,14 +410,14 @@ class qtype_preg_regex_handler {
      * Used mainly for unit-testing and avoiding re-parsing.
      */
     public function get_ast_root() {
-        return $this->ast_root;
+        return $this->astroot;
     }
 
     /**
      * Access function to the DST root.
      */
     public function get_dst_root() {
-        return $this->dst_root;
+        return $this->dstroot;
     }
 
     /**
@@ -408,7 +431,17 @@ class qtype_preg_regex_handler {
     }
 
     /**
-     * Returns subexpressions map.
+     * Returns max subpattern number.
+     */
+    public function get_max_subpatt() {
+        if ($this->parser !== null) {
+            return $this->parser->get_max_subpatt();
+        }
+        return 0;
+    }
+
+    /**
+     * Returns subexpressions name => number map.
      */
     public function get_subexpr_map() {
         if ($this->lexer !== null) {
@@ -418,11 +451,32 @@ class qtype_preg_regex_handler {
     }
 
     /**
-     * Returns all backreference nodes in the regex.
+     * Returns subpatterns number => node map.
      */
-    public function get_backrefs() {
+    public function get_subpatt_map() {
+        $result = array();
+        if ($this->parser !== null) {
+            $result = $this->parser->get_subpatt_map();
+        }
+        if ($this->selectednode !== null) {
+            $result[-2] = $this->selectednode;
+        }
+        return $result;
+    }
+
+    /**
+     * Returns all nodes with references to subexpressions (backreferences, conditional subexpressions, subexpression calls).
+     */
+    public function get_nodes_with_subexpr_refs() {
         if ($this->lexer !== null) {
-            return $this->lexer->get_backrefs();
+            return $this->lexer->get_nodes_with_subexpr_refs();
+        }
+        return array();
+    }
+
+    public function get_subexpr_refs_map() {
+        if ($this->lexer !== null) {
+            return $this->lexer->get_subexpr_refs_map();
         }
         return array();
     }
@@ -431,11 +485,11 @@ class qtype_preg_regex_handler {
         if (!$this->options->exactmatch) {
             return false;
         }
-        if ($pregnode->id == $this->ast_root->id) {
+        if ($pregnode->id == $this->astroot->id) {
             return true;
         }
-        if (is_a($this->ast_root, 'qtype_preg_operator')) {
-            foreach ($this->ast_root->operands as $operand) {
+        if (is_a($this->astroot, 'qtype_preg_operator')) {
+            foreach ($this->astroot->operands as $operand) {
                 if ($pregnode->id == $operand->id) {
                     return true;
                 }
@@ -576,7 +630,7 @@ class qtype_preg_regex_handler {
     }
 
     /**
-     * Does lexical and syntaxical analysis of the regex and builds an abstract syntax tree, saving root node in $this->ast_root.
+     * Does lexical and syntaxical analysis of the regex and builds an abstract syntax tree, saving root node in $this->astroot.
      * @param string regex - regular expression for building tree.
      */
     protected function build_tree($regex) {
@@ -585,7 +639,7 @@ class qtype_preg_regex_handler {
         $this->lexer = new qtype_preg_lexer($pseudofile);
         $this->lexer->set_options($this->options);
 
-        $this->parser = new qtype_preg_yyParser($this->options);
+        $this->parser = new qtype_preg_parser($this->options);
 
         while (($token = $this->lexer->nextToken()) !== null) {
             if (!is_array($token)) {
@@ -601,7 +655,7 @@ class qtype_preg_regex_handler {
         $lexerrors = $this->lexer->get_error_nodes();
         foreach ($lexerrors as $node) {
             if ($node->subtype == qtype_preg_node_error::SUBTYPE_UNCLOSED_CHARSET || $node->subtype == qtype_preg_node_error::SUBTYPE_MISSING_COMMENT_ENDING) {
-                $this->parser->doParse(qtype_preg_yyParser::PARSELEAF, $node);
+                $this->parser->doParse(qtype_preg_parser::PARSELEAF, $node);
             }
             $this->errornodes[] = $node;
             $this->errors[] = new qtype_preg_parsing_error($regex, $node);
@@ -623,24 +677,24 @@ class qtype_preg_regex_handler {
         }
 
         // Set AST and DST roots.
-        $this->ast_root = $this->parser->get_root();
-        if ($this->ast_root !== null && !$this->errors_exist()) { // Add necessary nodes.
+        $this->astroot = $this->parser->get_root();
+        if ($this->astroot !== null && !$this->errors_exist()) { // Add necessary nodes.
             if ($this->options->exactmatch) {
-                $newroot = $this->add_exact_match_nodes($this->ast_root);
-                $this->ast_root->subpattern = -1;
-                $this->ast_root = $newroot;
-                $this->ast_root->subpattern = 0;
+                $newroot = $this->add_exact_match_nodes($this->astroot);
+                $this->astroot->subpattern = -1;
+                $this->astroot = $newroot;
+                $this->astroot->subpattern = 0;
             }
             if ($this->options->selection->indfirst != -2) {
-                $newroot = $this->add_selection_nodes($this->ast_root);
-                $this->ast_root->subpattern = -1;
-                $this->ast_root = $newroot;
-                $this->ast_root->subpattern = 0;
+                $newroot = $this->add_selection_nodes($this->astroot);
+                $this->astroot->subpattern = -1;
+                $this->astroot = $newroot;
+                $this->astroot->subpattern = 0;
             }
         }
 
-        if ($this->ast_root != null) {
-            $this->dst_root = $this->from_preg_node(clone $this->ast_root);
+        if ($this->astroot != null) {
+            $this->dstroot = $this->from_preg_node(clone $this->astroot);
         }
 
         fclose($pseudofile);

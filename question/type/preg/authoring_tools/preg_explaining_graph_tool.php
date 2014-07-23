@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Defines explain graph's handler class.
+ * Defines explaining graph's handler class.
  *
  * @copyright &copy; 2012 Oleg Sychev, Volgograd State Technical University
  * @author Vladimir Ivanov, Volgograd State Technical University
@@ -88,14 +88,26 @@ class qtype_preg_explaining_graph_tool extends qtype_preg_dotbased_authoring_too
         return 'graph';
     }
 
+    public function generate_html() {
+        if ($this->regex->string() == '') {
+            return $this->data_for_empty_regex();
+        } else if ($this->errors_exist() || $this->get_ast_root() == null) {
+            return $this->data_for_unaccepted_regex();
+        }
+        $data = $this->data_for_accepted_regex();
+        return '<img src="' . $data['img'] . '">';
+    }
+
     /**
      * Overloaded from qtype_preg_authoring_tool.
      */
-    public function generate_json_for_accepted_regex(&$json) {
+    public function data_for_accepted_regex() {
         $graph = $this->create_graph();
         $dotscript = $graph->create_dot();
         $rawdata = qtype_preg_regex_handler::execute_dot($dotscript, 'svg');
-        $json[$this->json_key()] = 'data:image/svg+xml;base64,' . base64_encode($rawdata);
+        return array(
+            'img' => $rawdata
+        );
     }
 
     /**
@@ -103,14 +115,16 @@ class qtype_preg_explaining_graph_tool extends qtype_preg_dotbased_authoring_too
      * @return explainning graph of regular expression.
      */
     public function create_graph() {
-        $graph = $this->dst_root->create_graph();
+        $graph = $this->dstroot->create_graph();
 
         if ($this->options->exactmatch) {
             $graph->isexact = true;
         }
 
         $graph->nodes[] = new qtype_preg_explaining_graph_tool_node(array(get_string('explain_begin', 'qtype_preg')), 'box', 'purple', $graph, -1, 'filled', 'purple');
+        $graph->nodes[count($graph->nodes) - 1]->type = qtype_preg_explaining_graph_tool_node::TYPE_BOUNDARY;
         $graph->nodes[] = new qtype_preg_explaining_graph_tool_node(array(get_string('explain_end', 'qtype_preg')), 'box', 'purple', $graph, -1, 'filled', 'purple');
+        $graph->nodes[count($graph->nodes) - 1]->type = qtype_preg_explaining_graph_tool_node::TYPE_BOUNDARY;
 
         if (count($graph->nodes) == 2 && count($graph->subgraphs) == 0) {
             $graph->links[] = new qtype_preg_explaining_graph_tool_link('', $graph->nodes[0], $graph->nodes[count($graph->nodes) - 1], $graph);
@@ -121,7 +135,7 @@ class qtype_preg_explaining_graph_tool extends qtype_preg_dotbased_authoring_too
             $graph->entries = array();
             $graph->exits = array();
 
-            $graph->optimize_graph($graph, $graph);
+            $graph->optimize_graph($graph);
         }
 
         return $graph;

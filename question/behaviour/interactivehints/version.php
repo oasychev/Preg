@@ -18,8 +18,7 @@
  * Question behaviour where the student can submit questions one at a
  * time for immediate feedback with qtype specific hints support.
  *
- * @package    qbehaviour
- * @subpackage interactivehints
+ * @package    qbehaviour_interactivehints
  * @copyright  2013 Oleg Sychev, Volgograd State Technical University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -27,12 +26,12 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'qbehaviour_interactivehints';
-$plugin->version   = 2013081300;
-$plugin->requires  = 2013051400;
-$plugin->release = 'Interactive with hints behaviour 2.5';
+$plugin->version   = 2014071000;
+$plugin->requires  = 2013110500;
+$plugin->release = 'Interactive with hints behaviour 2.6';
 $plugin->maturity  = MATURITY_STABLE;
 
 $plugin->dependencies = array(
-    'qbehaviour_interactive' => 2013050100,
-    'qtype_poasquestion' => 2013062900
+    'qbehaviour_interactive' => 2013110500,
+    'qtype_poasquestion' => 2014071000
 );

@@ -7,7 +7,7 @@
  * @package questions
  */
 
-M.poasquestion_text_and_button = (function() {
+M.poasquestion_text_and_button = (function ($) {
 
     var self = {
 
@@ -120,7 +120,7 @@ M.poasquestion_text_and_button = (function() {
      * @param {int} pagewidth width of dialog
      */
     setup_dialog : function(pagewidth) {
-        self.dialog = $('<div id="preg_authoring_tools_dialog"><p>Loading...</p></div>');
+        self.dialog = $('<div id="poasquestion_textandbutton_dialog"><p>Loading...</p></div>');
 
         if (self.is_stand_alone()) {
             buttons = [
@@ -137,6 +137,7 @@ M.poasquestion_text_and_button = (function() {
             modal: true,
             closeOnEscape: true,
             width: self.dialogwidth,
+            minWidth: '1000px',
             title: self.dialogtitle,
             close: function() {
                 if (typeof(self.onclosecallback) === "function") {
@@ -145,6 +146,29 @@ M.poasquestion_text_and_button = (function() {
             },
             buttons: buttons
         });
+    },
+
+    loadDialogContent : function(url, scripts, callback) {
+        var received = 0;
+        var fakeCallback = function() {
+            received++;
+            if (received === scripts.length+1)
+                callback();
+        };
+        $.ajax({
+            url: url,
+            type: "GET",
+            dataType: "text"
+        }).done(function (responseText, textStatus, jqXHR) {
+            var tmpM = M;
+            var tpage_html = $.parseHTML(responseText, document, false);
+            $(self.dialog).html(tpage_html);
+            M = $.extend(M, tmpM);
+            fakeCallback();
+        });
+        for (var i = 0; i < scripts.length; i++) {
+            $.getScript(scripts[i], fakeCallback);
+        }
     },
 
     /**
@@ -195,4 +219,4 @@ M.poasquestion_text_and_button = (function() {
 
 return self;
 
-})();
+})(jQuery);

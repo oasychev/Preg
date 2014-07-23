@@ -15,8 +15,7 @@
 // along with Moodle.  If not, see <http:// www.gnu.org/licenses/>.
 
 /**
- * Defines handler for generating description of reg exp
- * Also defines specific tree, containing methods for generating descriptions of current node
+ * Defines tree nodes specific for generating regex descriptions
  *
  * @copyright &copy; 2012 Oleg Sychev, Volgograd State Technical University
  * @author Pahomov Dmitry
@@ -135,7 +134,7 @@ abstract class qtype_preg_description_node {
             $bgclor = 'orange';
         }
 
-        if (count($classes) !== 0 || $bgclor !== null) {
+        if ($numbering_pattern !== "%%tests%%" && (count($classes) !== 0 || $bgclor !== '')) {
             $classesstr = count($classes) ? ' class="' . implode(' ', $classes) . '"' : '';
             $stylestr = $bgclor!==null ? ' style="background: ' . $bgclor . '"' : '';
             $result = '<span' . $classesstr . $stylestr . '>' . $result . '</span>';
@@ -200,14 +199,14 @@ class qtype_preg_description_leaf_charset extends qtype_preg_description_leaf {
             return null;
         }
         // ok, character is non-printing, lets find its description in the language file
-        $hex = textlib::strtoupper(dechex($code));
+        $hex = core_text::strtoupper(dechex($code));
         if ($code <= 32 || $code == 127 || $code == 160 || $code == 173 || $code == 8194 ||
             $code == 8195 || $code == 8201 || $code == 8204 || $code == 8205) {
             return self::get_form_string('description_char' . $hex, null, $form);
         } else {
             $a = new stdClass;
             $a->code = $hex;
-            $a->char = textlib::code2utf8($code);
+            $a->char = core_text::code2utf8($code);
             return self::get_form_string('description_char_16value', $a, $form);
         }
     }
@@ -222,18 +221,19 @@ class qtype_preg_description_leaf_charset extends qtype_preg_description_leaf {
      */
     public static function describe_chr($char, $escapehtml = true, $form = null) {
         if (is_int($char)) {
-            $char = textlib::code2utf8($char);
+            $char = core_text::code2utf8($char);
         }
-        $code = textlib::utf8ord($char);
+        $code = core_text::utf8ord($char);
         $result = self::describe_nonprinting($code);
         if ($result === null) {
             //   &        >       <       "       '
             // &#38;    &#62;   &#60;   &#34;   &#39;
             if ($escapehtml) {
                 $result = qtype_preg_authoring_tool::char_to_html($char);
-            } else {
-                $result = $char;
             }
+            $a = new stdClass;
+            $a->char = $result;
+            $result = self::get_form_string('description_char', $a, $form);
         }
         return $result;
     }
@@ -261,9 +261,8 @@ class qtype_preg_description_leaf_charset extends qtype_preg_description_leaf {
         $rangestart = 0;
         $prevcode = -1;
         $state = self::FIRST_CHAR;
-        $curcode = -1;
         for ($i = 0; $i < $length; $i++) {
-            $curcode = textlib::utf8ord($str[$i]);
+            $curcode = core_text::utf8ord($str[$i]);
             if ($state == self::FIRST_CHAR) {
                 $state = self::OUT_OF_RANGE;
             } else if ($state == self::INTO_RANGE) {
@@ -416,11 +415,12 @@ class qtype_preg_description_leaf_backref extends qtype_preg_description_leaf {
 
 }
 
-class qtype_preg_description_leaf_recursion extends qtype_preg_description_leaf {
+class qtype_preg_description_leaf_subexpr_call extends qtype_preg_description_leaf {
 
     public function pattern($node_parent = null, $form = null) {
         //return parent::pattern($node_parent, $form);
-        return self::get_form_string($this->pregnode->lang_key(true), $this->pregnode->number, $form);
+        $postfix = $this->pregnode->isrecursive ? '_recursive' : '';
+        return self::get_form_string($this->pregnode->lang_key(true).$postfix, $this->pregnode->number, $form);
     }
 }
 
@@ -821,17 +821,22 @@ class qtype_preg_description_node_cond_subexpr extends qtype_preg_description_op
     public function pattern($node_parent = null, $form = null) {
         $a = new stdClass;
         $a->number = $this->pregnode->number;
+        $a->name = $a->number;
         $a->else = '';
         if (count($this->pregnode->operands) == 2 + (int)$this->pregnode->is_condition_assertion()) {
             $a->else = self::get_form_string('description_' . $this->pregnode->type . '_else', null, $form);
-
+        }
+        $needwrapper = $this->pregnode->subtype === qtype_preg_node_cond_subexpr::SUBTYPE_RECURSION || $this->pregnode->subtype === qtype_preg_node_cond_subexpr::SUBTYPE_SUBEXPR;
+        if ($needwrapper) {
+            $a->cond = self::get_form_string($this->pregnode->lang_key(true), $a, $form);
+            return self::get_form_string('description_subexpr_node_cond_subexpr_wrapper', $a, $form);
         }
         return self::get_form_string($this->pregnode->lang_key(true), $a, $form);
     }
 
     public function description($numbering_pattern, $node_parent = null, $form = null) {
         $resultpattern = parent::description($numbering_pattern, $this, $form);
-        if (textlib::strpos($resultpattern, '%cond') !== false) {
+        if (core_text::strpos($resultpattern, '%cond') !== false) {
             $conddescription = $this->condbranch->description($numbering_pattern, $this, $form);
             $resultpattern = qtype_poasquestion_string::replace('%cond', $conddescription, $resultpattern);
         }

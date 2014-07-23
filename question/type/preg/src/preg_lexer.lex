@@ -33,16 +33,20 @@ require_once($CFG->dirroot . '/question/type/preg/preg_parser.php');
 require_once($CFG->dirroot . '/question/type/preg/preg_nodes.php');
 require_once($CFG->dirroot . '/question/type/preg/preg_unicode.php');
 
+/**
+ * Class providing information for current subexpression. Stack of such objects
+ * grows when hitting '(' and similar parens; decreases when hitting ')'
+ */
 class qtype_preg_opt_stack_item {
     public $options;
-    public $last_dup_subexpr_number;
-    public $last_dup_subexpr_name;
+    public $dup_subexpr_number;
+    public $dup_subexpr_name;
     public $parennum;
 
-    public function __construct($options, $last_dup_subexpr_number, $last_dup_subexpr_name, $parennum) {
+    public function __construct($options, $dup_subexpr_number, $dup_subexpr_name, $parennum) {
         $this->options = $options;
-        $this->last_dup_subexpr_number = $last_dup_subexpr_number;
-        $this->last_dup_subexpr_name = $last_dup_subexpr_name;
+        $this->dup_subexpr_number = $dup_subexpr_number;
+        $this->dup_subexpr_name = $dup_subexpr_name;
         $this->parennum = $parennum;
     }
 
@@ -68,6 +72,7 @@ MODIFIER   = [imsxuADSUXJ]                              // Recognizable modifier
 ALNUM      = [^"!\"#$%&'()*+,-./:;<=>?[\]^`{|}~" \t\n]  // Used in subexpression\backreference names.
 ANY        = (.|[\r\n])                                 // Any character.
 SIGN       = ("+"|"-")                                  // Sign of an integer.
+WHITESPACE = [\x09\x0A\x0B\x0C\x0D\x20\x85\xA0]         // Whitespace character.
 
 %init{
     $this->options = new qtype_preg_handling_options();
@@ -96,7 +101,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     foreach ($this->nodes_with_subexpr_refs as $node) {
         $number = $node->number;
         if (is_int($number)) {
-            if ($number > $this->max_subexpr) {
+            if ($number > $this->maxsubexpr) {
                 // Error: unexisting subexpression.
                 $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNEXISTING_SUBEXPR, $number, $node);
                 $error->set_user_info($node->position, $node->userinscription);
@@ -118,6 +123,15 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
             $node->number = $number;
         }
     }
+
+    // Form the subexpr reference map.
+    foreach ($this->nodes_with_subexpr_refs as $node) {
+        if (!array_key_exists($node->number, $this->subexpr_refs_map)) {
+            $this->subexpr_refs_map[$node->number] = array();
+        }
+        $this->subexpr_refs_map[$node->number][] = $node;
+    }
+
 %eof}
 %{
     // Regex handling options set from the outside.
@@ -130,10 +144,10 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     protected $errors = array();
 
     // Number of the last lexed subexpression, used to deal with (?| ... ) constructions.
-    protected $last_subexpr = 0;
+    protected $lastsubexpr = 0;
 
     // Max subexpression number.
-    protected $max_subexpr = 0;
+    protected $maxsubexpr = 0;
 
     // Map of subexpression names => numbers.
     protected $subexpr_name_to_number_map = array();
@@ -141,17 +155,14 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     // Map of subexpression numbers => names.
     protected $subexpr_number_to_name_map = array();
 
-    // Array of nodes which have references to subexpressions: backreferences, conditional subexpressions, recursion.
+    // Array of nodes which have references to subexpressions: backreferences, conditional subexpressions, subexpression calls.
     protected $nodes_with_subexpr_refs = array();
 
-    // Array of backreference leafs. Used ad the end of lexical analysis to check for backrefs to unexisting subexpressions.
-    protected $backrefs = array();
+    // Array of subexpr references: subexpr number => array of reference nodes.
+    protected $subexpr_refs_map = array();
 
     // Stack containing additional information about subexpressions (options, current subexpression name, etc).
     protected $opt_stack = array();
-
-    // Number of items in the above stack.
-    protected $opt_count = 1;
 
     // Comment string.
     protected $comment = '';
@@ -176,140 +187,6 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 
     // Characters of the charset.
     protected $charset_set = '';
-    protected static $upropflags = array('C'                      => qtype_preg_charset_flag::UPROPC,
-                                         'Cc'                     => qtype_preg_charset_flag::UPROPCC,
-                                         'Cf'                     => qtype_preg_charset_flag::UPROPCF,
-                                         'Cn'                     => qtype_preg_charset_flag::UPROPCN,
-                                         'Co'                     => qtype_preg_charset_flag::UPROPCO,
-                                         'Cs'                     => qtype_preg_charset_flag::UPROPCS,
-                                         'L'                      => qtype_preg_charset_flag::UPROPL,
-                                         'Ll'                     => qtype_preg_charset_flag::UPROPLL,
-                                         'Lm'                     => qtype_preg_charset_flag::UPROPLM,
-                                         'Lo'                     => qtype_preg_charset_flag::UPROPLO,
-                                         'Lt'                     => qtype_preg_charset_flag::UPROPLT,
-                                         'Lu'                     => qtype_preg_charset_flag::UPROPLU,
-                                         'M'                      => qtype_preg_charset_flag::UPROPM,
-                                         'Mc'                     => qtype_preg_charset_flag::UPROPMC,
-                                         'Me'                     => qtype_preg_charset_flag::UPROPME,
-                                         'Mn'                     => qtype_preg_charset_flag::UPROPMN,
-                                         'N'                      => qtype_preg_charset_flag::UPROPN,
-                                         'Nd'                     => qtype_preg_charset_flag::UPROPND,
-                                         'Nl'                     => qtype_preg_charset_flag::UPROPNL,
-                                         'No'                     => qtype_preg_charset_flag::UPROPNO,
-                                         'P'                      => qtype_preg_charset_flag::UPROPP,
-                                         'Pc'                     => qtype_preg_charset_flag::UPROPPC,
-                                         'Pd'                     => qtype_preg_charset_flag::UPROPPD,
-                                         'Pe'                     => qtype_preg_charset_flag::UPROPPE,
-                                         'Pf'                     => qtype_preg_charset_flag::UPROPPF,
-                                         'Pi'                     => qtype_preg_charset_flag::UPROPPI,
-                                         'Po'                     => qtype_preg_charset_flag::UPROPPO,
-                                         'Ps'                     => qtype_preg_charset_flag::UPROPPS,
-                                         'S'                      => qtype_preg_charset_flag::UPROPS,
-                                         'Sc'                     => qtype_preg_charset_flag::UPROPSC,
-                                         'Sk'                     => qtype_preg_charset_flag::UPROPSK,
-                                         'Sm'                     => qtype_preg_charset_flag::UPROPSM,
-                                         'So'                     => qtype_preg_charset_flag::UPROPSO,
-                                         'Z'                      => qtype_preg_charset_flag::UPROPZ,
-                                         'Zl'                     => qtype_preg_charset_flag::UPROPZL,
-                                         'Zp'                     => qtype_preg_charset_flag::UPROPZP,
-                                         'Zs'                     => qtype_preg_charset_flag::UPROPZS,
-                                         'Xan'                    => qtype_preg_charset_flag::UPROPXAN,
-                                         'Xps'                    => qtype_preg_charset_flag::UPROPXPS,
-                                         'Xsp'                    => qtype_preg_charset_flag::UPROPXSP,
-                                         'Xwd'                    => qtype_preg_charset_flag::UPROPXWD,
-                                         'Arabic'                 => qtype_preg_charset_flag::ARABIC,
-                                         'Armenian'               => qtype_preg_charset_flag::ARMENIAN,
-                                         'Avestan'                => qtype_preg_charset_flag::AVESTAN,
-                                         'Balinese'               => qtype_preg_charset_flag::BALINESE,
-                                         'Bamum'                  => qtype_preg_charset_flag::BAMUM,
-                                         'Bengali'                => qtype_preg_charset_flag::BENGALI,
-                                         'Bopomofo'               => qtype_preg_charset_flag::BOPOMOFO,
-                                         'Braille'                => qtype_preg_charset_flag::BRAILLE,
-                                         'Buginese'               => qtype_preg_charset_flag::BUGINESE,
-                                         'Buhid'                  => qtype_preg_charset_flag::BUHID,
-                                         'Canadian_Aboriginal'    => qtype_preg_charset_flag::CANADIAN_ABORIGINAL,
-                                         'Carian'                 => qtype_preg_charset_flag::CARIAN,
-                                         'Cham'                   => qtype_preg_charset_flag::CHAM,
-                                         'Cherokee'               => qtype_preg_charset_flag::CHEROKEE,
-                                         'Common'                 => qtype_preg_charset_flag::COMMON,
-                                         'Coptic'                 => qtype_preg_charset_flag::COPTIC,
-                                         'Cuneiform'              => qtype_preg_charset_flag::CUNEIFORM,
-                                         'Cypriot'                => qtype_preg_charset_flag::CYPRIOT,
-                                         'Cyrillic'               => qtype_preg_charset_flag::CYRILLIC,
-                                         'Deseret'                => qtype_preg_charset_flag::DESERET,
-                                         'Devanagari'             => qtype_preg_charset_flag::DEVANAGARI,
-                                         'Egyptian_Hieroglyphs'   => qtype_preg_charset_flag::EGYPTIAN_HIEROGLYPHS,
-                                         'Ethiopic'               => qtype_preg_charset_flag::ETHIOPIC,
-                                         'Georgian'               => qtype_preg_charset_flag::GEORGIAN,
-                                         'Glagolitic'             => qtype_preg_charset_flag::GLAGOLITIC,
-                                         'Gothic'                 => qtype_preg_charset_flag::GOTHIC,
-                                         'Greek'                  => qtype_preg_charset_flag::GREEK,
-                                         'Gujarati'               => qtype_preg_charset_flag::GUJARATI,
-                                         'Gurmukhi'               => qtype_preg_charset_flag::GURMUKHI,
-                                         'Han'                    => qtype_preg_charset_flag::HAN,
-                                         'Hangul'                 => qtype_preg_charset_flag::HANGUL,
-                                         'Hanunoo'                => qtype_preg_charset_flag::HANUNOO,
-                                         'Hebrew'                 => qtype_preg_charset_flag::HEBREW,
-                                         'Hiragana'               => qtype_preg_charset_flag::HIRAGANA,
-                                         'Imperial_Aramaic'       => qtype_preg_charset_flag::IMPERIAL_ARAMAIC,
-                                         'Inherited'              => qtype_preg_charset_flag::INHERITED,
-                                         'Inscriptional_Pahlavi'  => qtype_preg_charset_flag::INSCRIPTIONAL_PAHLAVI,
-                                         'Inscriptional_Parthian' => qtype_preg_charset_flag::INSCRIPTIONAL_PARTHIAN,
-                                         'Javanese'               => qtype_preg_charset_flag::JAVANESE,
-                                         'Kaithi'                 => qtype_preg_charset_flag::KAITHI,
-                                         'Kannada'                => qtype_preg_charset_flag::KANNADA,
-                                         'Katakana'               => qtype_preg_charset_flag::KATAKANA,
-                                         'Kayah_Li'               => qtype_preg_charset_flag::KAYAH_LI,
-                                         'Kharoshthi'             => qtype_preg_charset_flag::KHAROSHTHI,
-                                         'Khmer'                  => qtype_preg_charset_flag::KHMER,
-                                         'Lao'                    => qtype_preg_charset_flag::LAO,
-                                         'Latin'                  => qtype_preg_charset_flag::LATIN,
-                                         'Lepcha'                 => qtype_preg_charset_flag::LEPCHA,
-                                         'Limbu'                  => qtype_preg_charset_flag::LIMBU,
-                                         'Linear_B'               => qtype_preg_charset_flag::LINEAR_B,
-                                         'Lisu'                   => qtype_preg_charset_flag::LISU,
-                                         'Lycian'                 => qtype_preg_charset_flag::LYCIAN,
-                                         'Lydian'                 => qtype_preg_charset_flag::LYDIAN,
-                                         'Malayalam'              => qtype_preg_charset_flag::MALAYALAM,
-                                         'Meetei_Mayek'           => qtype_preg_charset_flag::MEETEI_MAYEK,
-                                         'Mongolian'              => qtype_preg_charset_flag::MONGOLIAN,
-                                         'Myanmar'                => qtype_preg_charset_flag::MYANMAR,
-                                         'New_Tai_Lue'            => qtype_preg_charset_flag::NEW_TAI_LUE,
-                                         'Nko'                    => qtype_preg_charset_flag::NKO,
-                                         'Ogham'                  => qtype_preg_charset_flag::OGHAM,
-                                         'Old_Italic'             => qtype_preg_charset_flag::OLD_ITALIC,
-                                         'Old_Persian'            => qtype_preg_charset_flag::OLD_PERSIAN,
-                                         'Old_South_Arabian'      => qtype_preg_charset_flag::OLD_SOUTH_ARABIAN,
-                                         'Old_Turkic'             => qtype_preg_charset_flag::OLD_TURKIC,
-                                         'Ol_Chiki'               => qtype_preg_charset_flag::OL_CHIKI,
-                                         'Oriya'                  => qtype_preg_charset_flag::ORIYA,
-                                         'Osmanya'                => qtype_preg_charset_flag::OSMANYA,
-                                         'Phags_Pa'               => qtype_preg_charset_flag::PHAGS_PA,
-                                         'Phoenician'             => qtype_preg_charset_flag::PHOENICIAN,
-                                         'Rejang'                 => qtype_preg_charset_flag::REJANG,
-                                         'Runic'                  => qtype_preg_charset_flag::RUNIC,
-                                         'Samaritan'              => qtype_preg_charset_flag::SAMARITAN,
-                                         'Saurashtra'             => qtype_preg_charset_flag::SAURASHTRA,
-                                         'Shavian'                => qtype_preg_charset_flag::SHAVIAN,
-                                         'Sinhala'                => qtype_preg_charset_flag::SINHALA,
-                                         'Sundanese'              => qtype_preg_charset_flag::SUNDANESE,
-                                         'Syloti_Nagri'           => qtype_preg_charset_flag::SYLOTI_NAGRI,
-                                         'Syriac'                 => qtype_preg_charset_flag::SYRIAC,
-                                         'Tagalog'                => qtype_preg_charset_flag::TAGALOG,
-                                         'Tagbanwa'               => qtype_preg_charset_flag::TAGBANWA,
-                                         'Tai_Le'                 => qtype_preg_charset_flag::TAI_LE,
-                                         'Tai_Tham'               => qtype_preg_charset_flag::TAI_THAM,
-                                         'Tai_Viet'               => qtype_preg_charset_flag::TAI_VIET,
-                                         'Tamil'                  => qtype_preg_charset_flag::TAMIL,
-                                         'Telugu'                 => qtype_preg_charset_flag::TELUGU,
-                                         'Thaana'                 => qtype_preg_charset_flag::THAANA,
-                                         'Thai'                   => qtype_preg_charset_flag::THAI,
-                                         'Tibetan'                => qtype_preg_charset_flag::TIBETAN,
-                                         'Tifinagh'               => qtype_preg_charset_flag::TIFINAGH,
-                                         'Ugaritic'               => qtype_preg_charset_flag::UGARITIC,
-                                         'Vai'                    => qtype_preg_charset_flag::VAI,
-                                         'Yi'                     => qtype_preg_charset_flag::YI
-                                  );
 
     public static function char_escape_sequences_outside_charset() {
         return array('\a',
@@ -319,7 +196,9 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
                      '\n',
                      '\r',
                      '\t',
+                     '\0',
                      // \ddd
+                     '\o',
                      '\x');
     }
 
@@ -332,7 +211,9 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
                      '\n',
                      '\r',
                      '\t',
+                     '\0',
                      // \ddd
+                     '\o',
                      '\x');
     }
 
@@ -345,15 +226,19 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
                      '\n' => 0x0A,
                      '\r' => 0x0D,
                      '\t' => 0x09,
+                     // \0dd
                      // \ddd
+                     // \o
                      // \x
                         );
 
-        if (textlib::strlen($seq) < 2) {
+        $len = core_text::strlen($seq);
+
+        if ($len < 2) {
             return null;
         }
 
-        $octal = textlib::substr($seq, 1);
+        $octal = core_text::substr($seq, 1);
         if (self::ctype_octal($octal)) {
             return octdec($octal);
         }
@@ -363,8 +248,8 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         }
 
         if ($seq[1] == 'c') {
-            $x = textlib::strtoupper(textlib::substr($seq, 2));
-            $code = textlib::utf8ord($x);
+            $x = core_text::strtoupper(core_text::substr($seq, 2));
+            $code = core_text::utf8ord($x);
             if ($code > 127) {
                 return null;
             }
@@ -372,14 +257,32 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
             return $code;
         }
 
-        if ($seq[1] == 'x') {
+        if ($seq[1] == '0') {
+            if ($len == 2) {
+                return 0;
+            }
             $start = 2;
-            $end = textlib::strlen($seq) - 1;
+            $end = $len - 1;
+            return octdec(core_text::substr($seq, $start, $end - $start + 1));
+        }
+
+        if ($seq[1] == 'o') {
+            $start = 3;
+            $end = $len - 2;    // always followed by {...}
+            return octdec(core_text::substr($seq, $start, $end - $start + 1));
+        }
+
+        if ($seq[1] == 'x') {
+            if ($len == 2) {
+                return 0;
+            }
+            $start = 2;
+            $end = $len - 1;
             if ($seq[2] == '{') {
                 $start++;
                 $end--;
             }
-            return hexdec(textlib::substr($seq, $start, $end - $start + 1));
+            return hexdec(core_text::substr($seq, $start, $end - $start + 1));
         }
 
         return null;
@@ -394,15 +297,19 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     }
 
     public function get_max_subexpr() {
-        return $this->max_subexpr;
+        return $this->maxsubexpr;
     }
 
     public function get_subexpr_map() {
         return $this->subexpr_name_to_number_map;
     }
 
-    public function get_backrefs() {
-        return $this->backrefs;
+    public function get_nodes_with_subexpr_refs() {
+        return $this->nodes_with_subexpr_refs;
+    }
+
+    public function get_subexpr_refs_map() {
+        return $this->subexpr_refs_map;
     }
 
     public function set_options($options) {
@@ -441,36 +348,37 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         }
 
         // Unset and set local modifiers.
-        $stackitem = $this->opt_stack[$this->opt_count - 1];
+        $stackitem = end($this->opt_stack);
         $stackitem->options->unset_modifier($unset);
         $stackitem->options->set_modifier($set);
         return null;
     }
 
-    protected function push_options_stack_item($last_dup_subexpr_number = -1) {
-        $newitem = clone $this->opt_stack[$this->opt_count - 1];
-        $newitem->last_dup_subexpr_name = null;   // Reset it anyway.
-        $newitem->parennum = $this->opt_count;
-        $newitem->last_dup_subexpr_number = $last_dup_subexpr_number;
-        $this->opt_stack[$this->opt_count] = $newitem;
-        $this->opt_count++;
+    /**
+     * Should be called when any kind of opening paren occurs
+     */
+    protected function push_options_stack_item($dup_subexpr_number = -1) {
+        $newitem = clone end($this->opt_stack);
+        $newitem->dup_subexpr_name = null;   // Reset it anyway.
+        $newitem->parennum = count($this->opt_stack);
+        $newitem->dup_subexpr_number = $dup_subexpr_number;
+        $this->opt_stack[] = $newitem;
     }
 
+    /**
+     * Should be called when a closing paren occurs
+     */
     protected function pop_options_stack_item() {
-        if ($this->opt_count < 2) {
+        if (count($this->opt_stack) < 2) {
             // Stack should always contain at least 1 item.
+            // This is a syntax error, will be reported by parser.
             return;
         }
-        $item = array_pop($this->opt_stack);
-        $this->opt_count--;
-        // Is it a pair for some opening paren?
-        if ($item->parennum === $this->opt_count) {
-            // Are we eventually outside of a (?|...) block?
-            $previtem = $this->opt_stack[$this->opt_count - 1];
-            if ($previtem->last_dup_subexpr_number == -1) {
-                // Yes we are outside; set subpattern numeration to max occurred number.
-                $this->last_subexpr = $this->max_subexpr;
-            }
+        array_pop($this->opt_stack);
+        // Check if we got out of a (?|...) block. If so, reset subpattern numeration to the max occurred number.
+        $topitem = end($this->opt_stack);
+        if ($topitem->dup_subexpr_number == -1) {
+            $this->lastsubexpr = $this->maxsubexpr;
         }
     }
 
@@ -478,7 +386,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
      * Sets modifiers for the given node using the top stack item.
      */
     protected function set_node_modifiers(&$node) {
-        $topitem = $this->opt_stack[$this->opt_count - 1];
+        $topitem = end($this->opt_stack);
         if (is_a($node, 'qtype_preg_leaf')) {
             $node->caseless = $topitem->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_CASELESS);
         }
@@ -518,7 +426,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         if (!$infinite && $leftborder > $rightborder) {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_INCORRECT_QUANT_RANGE, $leftborder . ',' . $rightborder, $node);
         }
-        return new JLexToken(qtype_preg_yyParser::QUANT, $node);
+        return new JLexToken(qtype_preg_parser::QUANT, $node);
     }
 
     /**
@@ -528,7 +436,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         // Error: missing ) at end.
         if (qtype_preg_unicode::substr($text, $this->yylength() - 1, 1) !== ')') {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_CONTROL_ENDING, $text);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
         }
 
         $pos = $this->current_position_for_node();
@@ -538,81 +446,81 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         case '(*ACCEPT)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_ACCEPT);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*FAIL)':
         case '(*F)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_FAIL);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*COMMIT)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_COMMIT);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*THEN)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_THEN);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*SKIP)':
         case '(*SKIP:)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_SKIP);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*PRUNE)':
         case '(*PRUNE:)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_PRUNE);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*CR)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_CR);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*LF)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_LF);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*CRLF)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_CRLF);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*ANYCRLF)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_ANYCRLF);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*ANY)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_ANY);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*BSR_ANYCRLF)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_BSR_ANYCRLF);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*BSR_UNICODE)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_BSR_UNICODE);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*NO_START_OPT)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_NO_START_OPT);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*UTF8)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_UTF8);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*UTF16)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_UTF16);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         case '(*UCP)':
             $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_UCP);
             $node->set_user_info($pos, $ui);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         default:
             $delimpos = qtype_preg_unicode::strpos($text, ':');
 
             // Error: unknown control sequence.
             if ($delimpos === false) {
                 $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNKNOWN_CONTROL_SEQUENCE, $text);
-                return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+                return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
             }
 
             // There is a parameter separated by ":"
@@ -622,35 +530,35 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
             // Error: empty name.
             if ($name === '') {
                 $error = $this->form_error(qtype_preg_node_error::SUBTYPE_SUBEXPR_NAME_EXPECTED, $text);
-                return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+                return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
             }
 
             if ($subtype === 'MARK' || $delimpos === 2) {
                 $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_MARK_NAME, $name);
                 $node->set_user_info($pos, $ui);
-                return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+                return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
             } else if ($subtype === 'PRUNE') {
                 $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_MARK_NAME, $name);
                 $node->set_user_info($pos, $ui);
                 $node2 = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_PRUNE);
                 $node2->set_user_info($pos, $ui);
-                return array(new JLexToken(qtype_preg_yyParser::PARSELEAF, $node),
-                             new JLexToken(qtype_preg_yyParser::PARSELEAF, $node2));
+                return array(new JLexToken(qtype_preg_parser::PARSELEAF, $node),
+                             new JLexToken(qtype_preg_parser::PARSELEAF, $node2));
             } else if ($subtype === 'SKIP') {
                 $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_SKIP_NAME, $name);
                 $node->set_user_info($pos, $ui);
-                return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+                return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
             } else if ($subtype === 'THEN') {
                 $node = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_MARK_NAME, $name);
                 $node->set_user_info($pos, $ui);
                 $node2 = new qtype_preg_leaf_control(qtype_preg_leaf_control::SUBTYPE_THEN);
                 $node2->set_user_info($pos, $ui);
-                return array(new JLexToken(qtype_preg_yyParser::PARSELEAF, $node),
-                             new JLexToken(qtype_preg_yyParser::PARSELEAF, $node2));
+                return array(new JLexToken(qtype_preg_parser::PARSELEAF, $node),
+                             new JLexToken(qtype_preg_parser::PARSELEAF, $node2));
             }
 
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNKNOWN_CONTROL_SEQUENCE, $text);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
         }
     }
 
@@ -661,33 +569,42 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         // Error: empty name.
         if ($name === '') {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_SUBEXPR_NAME_EXPECTED, $text);
-            return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+            return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
         }
 
-        $number = $this->map_subexpression($name);
+        // Is it a duplicate (by name) of already existing subexpression?
+        $maxsubexprbefore = $this->maxsubexpr;
+        $nameexists = array_key_exists($name, $this->subexpr_name_to_number_map);
+
+        // Are we inside a (?| group?
+        $topitem = end($this->opt_stack);
+        $insidedup = ($topitem->dup_subexpr_number !== -1);
 
         $this->push_options_stack_item();
 
-        // Error: subexpressions with same names should have same numbers.
+        // Map name to number.
+        $number = $this->map_subexpression($name);
         if (is_object($number)) {
-            return new JLexToken(qtype_preg_yyParser::OPENBRACK, $number);  // $number contains the error object.
+            // Error: subexpressions with same names should have same numbers.
+            return new JLexToken(qtype_preg_parser::OPENBRACK, $number);  // $number contains the error object.
         }
 
-        // Are we inside a (?| group?
-        $penult = $this->opt_stack[$this->opt_count - 2];
-        $insidedup = ($penult->last_dup_subexpr_number !== -1);
-
-        if ($insidedup && $penult->last_dup_subexpr_name === null) {
+        if ($insidedup && $topitem->dup_subexpr_name === null) {
             // First occurence of a named subexpression inside a (?| group.
-            $penult->last_dup_subexpr_name = $name;
+            $topitem->dup_subexpr_name = $name;
         }
 
         // If all is fine, fill the another, inverse, map.
         $this->subexpr_number_to_name_map[$number] = $name;
 
-        $node = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_SUBEXPR, $number, $name);
+        $isduplicate = $nameexists || $number <= $maxsubexprbefore;
+        return $this->form_subexpr($text, qtype_preg_node_subexpr::SUBTYPE_SUBEXPR, $number, $name, $isduplicate);
+    }
+
+    protected function form_subexpr($text, $subtype, $number = -1, $name = null, $isduplicate = false) {
+        $node = new qtype_preg_node_subexpr($subtype, $number, $name, $isduplicate);
         $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text)));
-        return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+        return new JLexToken(qtype_preg_parser::OPENBRACK, $node);
     }
 
     /**
@@ -699,7 +616,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         // Error: unclosed condition.
         if (qtype_preg_unicode::substr($text, $this->yylength() - strlen($ending)) != $ending) {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_CONDSUBEXPR_ENDING, $text);
-            return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+            return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
         }
 
         $node = new qtype_preg_node_cond_subexpr(qtype_preg_node_cond_subexpr::SUBTYPE_SUBEXPR, $number);
@@ -718,9 +635,9 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $closebr = new qtype_preg_lexem();
         $closebr->set_user_info($this->current_position_for_node());
 
-        return array(new JLexToken(qtype_preg_yyParser::CONDSUBEXPR, $node),
-                     new JLexToken(qtype_preg_yyParser::PARSELEAF, null),        // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
-                     new JLexToken(qtype_preg_yyParser::CLOSEBRACK, $closebr));  // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
+        return array(new JLexToken(qtype_preg_parser::CONDSUBEXPR, $node),
+                     new JLexToken(qtype_preg_parser::PARSELEAF, null),        // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
+                     new JLexToken(qtype_preg_parser::CLOSEBRACK, $closebr));  // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
     }
 
     /**
@@ -732,7 +649,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         // Error: unclosed condition.
         if (qtype_preg_unicode::substr($text, $this->yylength() - 1) != ')') {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_CONDSUBEXPR_ENDING, $text);
-            return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+            return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
         }
 
         $node = new qtype_preg_node_cond_subexpr(qtype_preg_node_cond_subexpr::SUBTYPE_RECURSION, $number);
@@ -746,9 +663,9 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $closebr = new qtype_preg_lexem();
         $closebr->set_user_info($this->current_position_for_node());
 
-        return array(new JLexToken(qtype_preg_yyParser::CONDSUBEXPR, $node),
-                     new JLexToken(qtype_preg_yyParser::PARSELEAF, null),        // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
-                     new JLexToken(qtype_preg_yyParser::CLOSEBRACK, $closebr));  // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
+        return array(new JLexToken(qtype_preg_parser::CONDSUBEXPR, $node),
+                     new JLexToken(qtype_preg_parser::PARSELEAF, null),        // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
+                     new JLexToken(qtype_preg_parser::CLOSEBRACK, $closebr));  // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
     }
 
     /**
@@ -760,7 +677,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 
         $node = new qtype_preg_node_cond_subexpr($subtype);
         $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text)));
-        return new JLexToken(qtype_preg_yyParser::CONDSUBEXPR, $node);
+        return new JLexToken(qtype_preg_parser::CONDSUBEXPR, $node);
     }
 
     /**
@@ -772,7 +689,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         // Error: unclosed condition.
         if (qtype_preg_unicode::substr($text, $this->yylength() - 1) != ')') {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_CONDSUBEXPR_ENDING, $text);
-            return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+            return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
         }
 
         $node = new qtype_preg_node_cond_subexpr(qtype_preg_node_cond_subexpr::SUBTYPE_DEFINE);
@@ -781,9 +698,9 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $closebr = new qtype_preg_lexem();
         $closebr->set_user_info($this->current_position_for_node());
 
-        return array(new JLexToken(qtype_preg_yyParser::CONDSUBEXPR, $node),
-                     new JLexToken(qtype_preg_yyParser::PARSELEAF, null),        // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
-                     new JLexToken(qtype_preg_yyParser::CLOSEBRACK, $closebr));  // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
+        return array(new JLexToken(qtype_preg_parser::CONDSUBEXPR, $node),
+                     new JLexToken(qtype_preg_parser::PARSELEAF, null),        // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
+                     new JLexToken(qtype_preg_parser::CLOSEBRACK, $closebr));  // Fictive lexem, used to satisfy grammar for both simple and assertion conditions
     }
 
     /**
@@ -793,13 +710,13 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         // Error: missing opening characters.
         if (qtype_preg_unicode::substr($text, $namestartpos - 1, 1) !== $opentype) {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_BACKREF_BEGINNING, $opentype);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
         }
 
         // Error: missing closing characters.
         if (qtype_preg_unicode::substr($text, $this->yylength() - 1, 1) !== $closetype) {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_BACKREF_ENDING, $closetype);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
         }
 
         $name = qtype_preg_unicode::substr($text, $namestartpos, $this->yylength() - $namestartpos - 1);
@@ -807,7 +724,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         // Error: empty name.
         if ($name === '') {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_SUBEXPR_NAME_EXPECTED, $text);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
         }
 
         return $this->form_backref($text, $name);
@@ -820,9 +737,8 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $node = new qtype_preg_leaf_backref($number);
         $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text)));
         $this->set_node_modifiers($node);
-        $this->backrefs[] = $node;
         $this->nodes_with_subexpr_refs[] = $node;
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
     }
 
     /**
@@ -832,7 +748,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $node = new $classname($negative);
         $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text, $node->subtype)));
         $this->set_node_modifiers($node);
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
     }
 
     /**
@@ -843,7 +759,6 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $uitype = $type === qtype_preg_charset_flag::TYPE_SET ? null : $data;
         $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text, $uitype)));
         $node->subtype = $type;
-        $node->israngecalculated = false;
 
         $this->set_node_modifiers($node);
 
@@ -856,31 +771,31 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
             $flag->set_data($type, $data);
             $node->flags = array(array($flag));
         }
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
     }
 
     /**
-     * Returns a named recursion token.
+     * Returns a named subexpression call token.
      */
-    protected function form_named_recursion($text, $name) {
+    protected function form_named_subexpr_call($text, $name) {
         // Error: empty name.
         if ($name === '') {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_SUBEXPR_NAME_EXPECTED, $text);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
         }
-        return $this->form_recursion($text, $name);
+        return $this->form_subexpr_call($text, $name);
     }
 
     /**
-     * Returns a recursion token.
+     * Returns a subexpression call token.
      */
-    protected function form_recursion($text, $number) {
-        $node = new qtype_preg_leaf_recursion();
+    protected function form_subexpr_call($text, $number) {
+        $node = new qtype_preg_leaf_subexpr_call();
         $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text)));
         $node->number = $number;
         $this->set_node_modifiers($node);
         $this->nodes_with_subexpr_refs[] = $node;
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
     }
 
     /**
@@ -905,12 +820,12 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $userinscriptionstart = array_pop($this->charset->userinscription);
         $this->charset->userinscription[] = new qtype_preg_userinscription($userinscriptionstart->data . '-' . $userinscriptionend->data);
 
-        if (textlib::utf8ord($startchar) <= textlib::utf8ord($endchar)) {
+        if (core_text::utf8ord($startchar) <= core_text::utf8ord($endchar)) {
             // Replace last 3 characters by all the characters between them.
             $this->charset_set = qtype_preg_unicode::substr($this->charset_set, 0, $this->charset_count - 3);
             $this->charset_count -= 3;
-            $curord = textlib::utf8ord($startchar);
-            $endord = textlib::utf8ord($endchar);
+            $curord = core_text::utf8ord($startchar);
+            $endord = core_text::utf8ord($endchar);
             while ($curord <= $endord) {
                 $this->charset_set .= qtype_preg_unicode::code2utf8($curord++);
                 $this->charset_count++;
@@ -933,7 +848,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $exists = isset($this->subexpr_name_to_number_map[$name]);
         if (!$exists) {
             // This subexpression does not exists, all is OK. Almost.
-            $number = $this->last_subexpr + 1;
+            $number = $this->lastsubexpr + 1;
 
             if (isset($this->subexpr_number_to_name_map[$number])) {
                 // There can be situations like (?|(?<name1>)|(?<name2>)). By this moment name2 doesn't exist, but this is an error.
@@ -946,30 +861,30 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
             }
 
             $this->subexpr_name_to_number_map[$name] = $number;
-            $this->last_subexpr++;
-            $this->max_subexpr = max($this->max_subexpr, $this->last_subexpr);
+            $this->lastsubexpr++;
+            $this->maxsubexpr = max($this->maxsubexpr, $this->lastsubexpr);
             return $number;
         }
 
         // This subexpression does exist.
         $number = $this->subexpr_name_to_number_map[$name];
-        $topitem = $this->opt_stack[$this->opt_count - 1];
+        $topitem = end($this->opt_stack);
         $modJ = $topitem->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_DUPNAMES);
 
         $assumed_name = $this->subexpr_number_to_name_map[$number];
 
-        if ($number == $this->last_subexpr && !$modJ) {
+        if ($number == $this->lastsubexpr && !$modJ) {
             // Two subexpressions with same number in a row is error.
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_DUPLICATE_SUBEXPR_NAMES, $name, '');
             return $error;
         }
 
-        if ($modJ && $number == $this->last_subexpr) {
+        if ($modJ && $number == $this->lastsubexpr) {
             $number++;
         }
 
-        $this->last_subexpr++;
-        $this->max_subexpr = max($this->max_subexpr, $this->last_subexpr);
+        $this->lastsubexpr++;
+        $this->maxsubexpr = max($this->maxsubexpr, $this->lastsubexpr);
         return $number;
     }
 
@@ -1031,7 +946,15 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
      * @return a constant of qtype_preg_leaf_charset if this property is known, null otherwise.
      */
     protected function get_uprop_flag($str) {
-        return isset(self::$upropflags[$str]) ? self::$upropflags[$str] : null;
+        if ($str == 'L&') {
+            // This is an exception
+            return qtype_preg_charset_flag::UPROP_Llut;
+        }
+        $constname = "qtype_preg_charset_flag::UPROP_$str";
+        if (defined($constname)) {
+            return $str;
+        }
+        return null;
     }
 %}
 
@@ -1040,8 +963,8 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 <YYINITIAL> \n {
     // Newlines are totally ignored independent on the 'x' option.
 }
-<YYINITIAL> [\ \r\t\f] {                         /* More than one whitespace */
-    $topitem = $this->opt_stack[$this->opt_count - 1];
+<YYINITIAL> {WHITESPACE} {                       /* Whitespace */
+    $topitem = end($this->opt_stack);
     if (!$topitem->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_EXTENDED)) {
         // If the "x" modifier is not set, return all the whitespaces.
         $text = $this->yytext();
@@ -1049,7 +972,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     }
 }
 <YYINITIAL> "#" {                                /* Comment beginning when modifier x is set */
-    $topitem = $this->opt_stack[$this->opt_count - 1];
+    $topitem = end($this->opt_stack);
     if ($topitem->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_EXTENDED)) {
         $this->state_begin_position = $this->current_position_for_node();
         $this->yybegin(self::YYCOMMENTEXT);
@@ -1092,11 +1015,11 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 <YYINITIAL> "{"[0-9]+","[0-9]+"}"{QUANTTYPE} {   // {n,m} Quantifier at least n, no more than m
     $text = $this->yytext();
     $textlen = $this->yylength();
-    $lastchar = qtype_preg_unicode::substr($text, $textlen - 1, 1);
+    $lastchar = qtype_preg_unicode::substr($text, -1);
     $greedy = $lastchar === '}';
     $lazy = $lastchar === '?';
     $possessive = !$greedy && !$lazy;
-    $greedy|| $textlen--;
+    $greedy || $textlen--;
     $delimpos = qtype_preg_unicode::strpos($text, ',');
     $leftborder = (int)qtype_preg_unicode::substr($text, 1, $delimpos - 1);
     $rightborder = (int)qtype_preg_unicode::substr($text, $delimpos + 1, $textlen - 2 - $delimpos);
@@ -1105,29 +1028,24 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 <YYINITIAL> "{"[0-9]+",}"{QUANTTYPE} {           // {n,}  Quantifier n or more
     $text = $this->yytext();
     $textlen = $this->yylength();
-    $lastchar = qtype_preg_unicode::substr($text, $textlen - 1, 1);
-    $greedy= $lastchar === '}';
+    $lastchar = qtype_preg_unicode::substr($text, -1);
+    $greedy = $lastchar === '}';
     $lazy = $lastchar === '?';
     $possessive = !$greedy&& !$lazy;
-    $greedy|| $textlen--;
+    $greedy || $textlen--;
     $leftborder = (int)qtype_preg_unicode::substr($text, 1, $textlen - 1);
     return $this->form_quant($text, true, $leftborder, null, $lazy, $greedy, $possessive);
 }
-<YYINITIAL> "{,"[0-9]+"}"{QUANTTYPE} {           // {,m}  Quantifier no more than m
+<YYINITIAL> "{"[0-9]+"}"{QUANTTYPE} {            // {n}    Quantifier exactly n
     $text = $this->yytext();
     $textlen = $this->yylength();
-    $lastchar = qtype_preg_unicode::substr($text, $textlen - 1, 1);
-    $greedy= ($lastchar === '}');
-    $lazy = !$greedy&& $lastchar === '?';
+    $lastchar = qtype_preg_unicode::substr($text, -1);
+    $greedy = $lastchar === '}';
+    $lazy = $lastchar === '?';
     $possessive = !$greedy&& !$lazy;
-    $greedy|| $textlen--;
-    $rightborder = (int)qtype_preg_unicode::substr($text, 2, $textlen - 3);
-    return $this->form_quant($text, false, 0, $rightborder, $lazy, $greedy, $possessive);
-}
-<YYINITIAL> "{"[0-9]+"}" {                       // {n}    Quantifier exactly n
-    $text = $this->yytext();
-    $count = (int)qtype_preg_unicode::substr($text, 1, $this->yylength() - 2);
-    return $this->form_quant($text, false, $count, $count, false, true, false);
+    $greedy || $textlen--;
+    $count = (int)qtype_preg_unicode::substr($text, 1, $textlen - 1);
+    return $this->form_quant($text, false, $count, $count, $lazy, $greedy, $possessive);
 }
 
 
@@ -1136,7 +1054,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 <YYINITIAL> \\[1-9][0-9]?[0-9]? {      /* \n              Backreference by number (can be ambiguous) */
     $text = $this->yytext();
     $str = qtype_preg_unicode::substr($text, 1);
-    if ((int)$str < 10 || ((int)$str <= $this->max_subexpr && (int)$str < 100)) {
+    if ((int)$str < 8 || ((int)$str <= $this->maxsubexpr && (int)$str < 100)) {
         // Return a backreference.
         return $this->form_backref($text, (int)$str);
     }
@@ -1151,38 +1069,38 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
             $failed = true;
         }
     }
-    if (qtype_preg_unicode::strlen($octal) === 0) {
-        // If no octal digits found, it should be 0.
-        $octal = '0';
-        $tail = $str;
-    } else {
-        // Octal digits found.
-        $tail = qtype_preg_unicode::substr($str, qtype_preg_unicode::strlen($octal));
+    $tail = qtype_preg_unicode::substr($str, qtype_preg_unicode::strlen($octal));
+    $result = array();
+    if ($octal != '') {
+        // Character by octal code.
+        $charset = $this->form_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8(octdec($octal)));
+        $charset->value->position->indlast -= core_text::strlen($tail);
+        $charset->value->position->collast -= core_text::strlen($tail);
+        $charset->value->userinscription = array(new qtype_preg_userinscription($tail == $str ? '\\' : '\\' . $octal));
+        $result[] = $charset;
     }
-    // Return a single lexem if all digits are octal, an array of lexems otherwise.
-    $charset = $this->form_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8(octdec($octal)));
-    $charset->value->position->indlast -= textlib::strlen($tail);
-    $charset->value->position->collast -= textlib::strlen($tail);
-    $charset->value->userinscription = array(new qtype_preg_userinscription($tail == $str ? '\\' : '\\' . $octal));
-    if (qtype_preg_unicode::strlen($tail) === 0) {
-        return $charset;
+    if (qtype_preg_unicode::strlen($tail) > 0) {
+        // Plain digits
+        $tokens = $this->string_to_tokens($tail);
+        $offset = core_text::strlen($text) - core_text::strlen($tail);
+        foreach ($tokens as $token) {
+            $token->value->position = new qtype_preg_position($this->yychar + $offset, $this->yychar + $offset,
+                                            $this->yyline, $this->yyline,
+                                            $this->yycol + $offset, $this->yycol + $offset);
+            $offset++;
+        }
+        $result = array_merge($result, $tokens);
     }
-    $tokens = $this->string_to_tokens($tail);
-    $offset = textlib::strlen($text) - textlib::strlen($tail);
-    foreach ($tokens as $token) {
-        $token->value->position = new qtype_preg_position($this->yychar + $offset, $this->yychar + $offset,
-                                        $this->yyline, $this->yyline,
-                                        $this->yycol + $offset, $this->yycol + $offset);
-        $offset++;
-    }
-    return array_merge(array($charset), $tokens);
+    return count($result) > 1
+           ? $result
+           : $result[0];
 }
 <YYINITIAL> "\g"-?[0-9][0-9]? {        /* \gn \g-n        Backreference by number */
     $text = $this->yytext();
     $number = (int)qtype_preg_unicode::substr($text, 2);
     // Convert relative backreferences to absolute.
     if ($number < 0) {
-        $number = $this->last_subexpr + $number + 1;
+        $number = $this->lastsubexpr + $number + 1;
     }
     return $this->form_backref($text, $number);
 }
@@ -1191,7 +1109,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $number = (int)qtype_preg_unicode::substr($text, 3, $this->yylength() - 4);
     // Convert relative backreferences to absolute.
     if ($number < 0) {
-        $number = $this->last_subexpr + $number + 1;
+        $number = $this->lastsubexpr + $number + 1;
     }
     return $this->form_backref($text, $number);
 }
@@ -1216,18 +1134,17 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 
 <YYINITIAL> "(" {                      /* (...)           Subexpression */
     $this->push_options_stack_item();
-    $this->last_subexpr++;
-    $this->max_subexpr = max($this->max_subexpr, $this->last_subexpr);
-    $node = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_SUBEXPR, $this->last_subexpr);
-    $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription('(')));
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+    $this->lastsubexpr++;
+    $isduplicate = $this->lastsubexpr <= $this->maxsubexpr;
+    $this->maxsubexpr = max($this->maxsubexpr, $this->lastsubexpr);
+    return $this->form_subexpr('(', qtype_preg_node_subexpr::SUBTYPE_SUBEXPR, $this->lastsubexpr, null, $isduplicate);
 }
 <YYINITIAL> "(?<"{ALNUM}*">"? {         /* (?<name>...)     Named subexpression (Perl) */
     $text = $this->yytext();
     $last = qtype_preg_unicode::substr($text, $this->yylength() - 1, 1);
     if ($last != '>') {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_SUBEXPR_NAME_ENDING, $text);
-        return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+        return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
     }
     $name = qtype_preg_unicode::substr($text, 3, $this->yylength() - 4);
     return $this->form_named_subexpr($text, $name);
@@ -1237,7 +1154,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $last = qtype_preg_unicode::substr($text, $this->yylength() - 1, 1);
     if ($last != '\'') {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_SUBEXPR_NAME_ENDING, $text);
-        return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+        return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
     }
     $name = qtype_preg_unicode::substr($text, 3, $this->yylength() - 4);
     return $this->form_named_subexpr($text, $name);
@@ -1247,35 +1164,29 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $last = qtype_preg_unicode::substr($text, $this->yylength() - 1, 1);
     if ($last != '>') {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_SUBEXPR_NAME_ENDING, $text);
-        return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+        return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
     }
     $name = qtype_preg_unicode::substr($text, 4, $this->yylength() - 5);
     return $this->form_named_subexpr($text, $name);
 }
 <YYINITIAL> "(?:" {                    /* (?:...)         Non-capturing group */
     $this->push_options_stack_item();
-    $node = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_GROUPING);
-    $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription('(?:')));
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+    return $this->form_subexpr('(?:', qtype_preg_node_subexpr::SUBTYPE_GROUPING);
 }
 <YYINITIAL> "(?|" {                    /* (?|...)         Non-capturing group, duplicate subexpression numbers */
     // Save the top-level subexpression number.
-    $this->push_options_stack_item($this->last_subexpr);
-    $node = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_GROUPING);
-    $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription('(?|')));
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+    $this->push_options_stack_item($this->lastsubexpr);
+    return $this->form_subexpr('(?|', qtype_preg_node_subexpr::SUBTYPE_GROUPING);
 }
 <YYINITIAL> "(?>" {                    /* (?>...)         Atomic, non-capturing group */
     $this->push_options_stack_item();
-    $node = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_ONCEONLY);
-    $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription('(?>')));
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+    return $this->form_subexpr('(?>', qtype_preg_node_subexpr::SUBTYPE_ONCEONLY);
 }
 <YYINITIAL> ")" {
     $this->pop_options_stack_item();
     $closebr = new qtype_preg_lexem();
     $closebr->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription(')')));
-    return new JLexToken(qtype_preg_yyParser::CLOSEBRACK, $closebr);
+    return new JLexToken(qtype_preg_parser::CLOSEBRACK, $closebr);
 }
 
 
@@ -1329,7 +1240,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $node = new qtype_preg_leaf_options(new qtype_poasquestion_string($set), new qtype_poasquestion_string($unset));
         $node->errors = $errors;
         $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text)));
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $node);
     } else {
         $this->skipped_positions[] = $this->current_position_for_node();
     }
@@ -1350,18 +1261,14 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $errors = $this->modify_top_options_stack_item($setflags, $unsetflags);
     if ($this->options->preserveallnodes) {
         $res = array();
-        $node = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_GROUPING);
-        $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text)));
-        $res[] = new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+        $res[] = $this->form_subexpr($text, qtype_preg_node_subexpr::SUBTYPE_GROUPING);
         $node = new qtype_preg_leaf_options(new qtype_poasquestion_string($set), new qtype_poasquestion_string($unset));
         $node->errors = $errors;
         $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text)));
-        $res[] = new JLexToken(qtype_preg_yyParser::PARSELEAF, $node);
+        $res[] = new JLexToken(qtype_preg_parser::PARSELEAF, $node);
         return $res;
     } else {
-        $node = new qtype_preg_node_subexpr(qtype_preg_node_subexpr::SUBTYPE_GROUPING);
-        $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($text)));
-        return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+        return $this->form_subexpr($text, qtype_preg_node_subexpr::SUBTYPE_GROUPING);
     }
 }
 
@@ -1372,25 +1279,25 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $this->push_options_stack_item();
     $node = new qtype_preg_node_assert(qtype_preg_node_assert::SUBTYPE_PLA);
     $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($this->yytext())));
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+    return new JLexToken(qtype_preg_parser::OPENBRACK, $node);
 }
 <YYINITIAL> "(?!" {                    /* (?!...)         Negative look ahead assertion */
     $this->push_options_stack_item();
     $node = new qtype_preg_node_assert(qtype_preg_node_assert::SUBTYPE_NLA);
     $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($this->yytext())));
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+    return new JLexToken(qtype_preg_parser::OPENBRACK, $node);
 }
 <YYINITIAL> "(?<=" {                   /* (?<=...)        Positive look behind assertion */
     $this->push_options_stack_item();
     $node = new qtype_preg_node_assert(qtype_preg_node_assert::SUBTYPE_PLB);
     $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($this->yytext())));
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+    return new JLexToken(qtype_preg_parser::OPENBRACK, $node);
 }
 <YYINITIAL> "(?<!" {                   /* (?<!...)        Negative look behind assertion */
     $this->push_options_stack_item();
     $node = new qtype_preg_node_assert(qtype_preg_node_assert::SUBTYPE_NLB);
     $node->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription($this->yytext())));
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $node);
+    return new JLexToken(qtype_preg_parser::OPENBRACK, $node);
 }
 
 
@@ -1398,42 +1305,42 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 
 <YYINITIAL> "(?R)" {                   /* (?R)            Recurse whole pattern */
     $text = $this->yytext();
-    return $this->form_recursion($text, 0);
+    return $this->form_subexpr_call($text, 0);
 }
 <YYINITIAL> "(?"[0-9]+")" {            /* (?n)            Call subexpression by absolute number */
     $text = $this->yytext();
     $number = (int)qtype_preg_unicode::substr($text, 2, $this->yylength() - 3);
-    return $this->form_recursion($text, $number);
+    return $this->form_subexpr_call($text, $number);
 }
 <YYINITIAL> "(?"{SIGN}[0-9]+")" {      /* (?+n) (?-n)     Call subexpression by relative number */
     $text = $this->yytext();
     $number = (int)qtype_preg_unicode::substr($text, 3, $this->yylength() - 4);
     if ($text[2] == '-') {
-        $number = $this->last_subexpr - $number + 1;
+        $number = $this->lastsubexpr - $number + 1;
     } else {
-        $number = $this->last_subexpr + $number;
+        $number = $this->lastsubexpr + $number;
     }
-    return $this->form_recursion($text, $number);
+    return $this->form_subexpr_call($text, $number);
 }
 <YYINITIAL> "(?&"{ALNUM}*")" {         /* (?&name)        Call subexpression by name (Perl) */
     $text = $this->yytext();
     $name = qtype_preg_unicode::substr($text, 3, $this->yylength() - 4);
-    return $this->form_named_recursion($text, $name);
+    return $this->form_named_subexpr_call($text, $name);
 }
 <YYINITIAL> "(?P>"{ALNUM}*")" {        /* (?P>name)       Call subexpression by name (Python) */
     $text = $this->yytext();
     $name = qtype_preg_unicode::substr($text, 4, $this->yylength() - 5);
-    return $this->form_named_recursion($text, $name);
+    return $this->form_named_subexpr_call($text, $name);
 }
 <YYINITIAL> "\g<"{ALNUM}*">" {         /* \g<name>        Call subexpression by name (Oniguruma) */
     $text = $this->yytext();
     $name = qtype_preg_unicode::substr($text, 3, $this->yylength() - 4);
-    return $this->form_named_recursion($text, $name);
+    return $this->form_named_subexpr_call($text, $name);
 }
 <YYINITIAL> "\g'"{ALNUM}*"'" {         /* \g'name'        Call subexpression by name (Oniguruma) */
     $text = $this->yytext();
     $name = qtype_preg_unicode::substr($text, 3, $this->yylength() - 4);
-    return $this->form_named_recursion($text, $name);
+    return $this->form_named_subexpr_call($text, $name);
 // TODO:
 //         \g<n>           call subpattern by absolute number (Oniguruma)
 //         \g'n'           call subpattern by absolute number (Oniguruma)
@@ -1463,6 +1370,10 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 }
 <YYINITIAL> "(?(R"[0-9]*")"? {         /* (?(R)... or (?(Rn)...     Conditional subexpression - overall or specific group recursion condition */
     $text = $this->yytext();
+    // Special case: (?(R with existing subpattern named "R"
+    if ($text == '(?(R)' && array_key_exists('R', $this->subexpr_name_to_number_map)) {
+        return $this->form_numeric_or_named_cond_subexpr($text, 'R', ')');
+    }
     $number = (int)qtype_preg_unicode::substr($text, 4, $this->yylength() - 5);
     return $this->form_recursive_cond_subexpr($text, $number);
 }
@@ -1480,9 +1391,9 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $text = $this->yytext();
     $number = (int)qtype_preg_unicode::substr($text, 4, $this->yylength() - 5);
     if ($text[3] == '-') {
-        $number = $this->last_subexpr - $number + 1;
+        $number = $this->lastsubexpr - $number + 1;
     } else {
-        $number = $this->last_subexpr + $number;
+        $number = $this->lastsubexpr + $number;
     }
     return $this->form_numeric_or_named_cond_subexpr($text, $number, ')');
 }
@@ -1512,16 +1423,15 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $text = $this->yytext();
     if (qtype_preg_unicode::substr($text, $this->yylength() - 1, 1) !== ')') {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_CALLOUT_ENDING, $text);
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
     }
-    throw new Exception('Callouts are not implemented yet');
-    $number = (int)qtype_preg_unicode::substr($text, 3, $this->yylength() - 4);
+    $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNKNOWN_ERROR, 'Callouts are not implemented yet');
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
+    /*$number = (int)qtype_preg_unicode::substr($text, 3, $this->yylength() - 4);
     if ($number > 255) {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CALLOUT_BIG_NUMBER, $text);
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
-    } else {
-        // TODO: for now this code will return either error or exception :)
-    }
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
+    }*/
 }
 
 
@@ -1556,27 +1466,27 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 
 <YYINITIAL> "\g" {                     /* ERROR: missing brackets for \g */
     $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_BRACKETS_FOR_G, $this->yytext());
-    return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
 }
 <YYINITIAL> "\k" {                     /* ERROR: missing brackets for \k */
     $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_BRACKETS_FOR_K, $this->yytext());
-    return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
 }
 <YYINITIAL> "(?P=" {                   /* ERROR: missing closing paren for (?P= */
     $error = $this->form_error(qtype_preg_node_error::SUBTYPE_MISSING_SUBEXPR_NAME_ENDING, $this->yytext());
-    return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
 }
 <YYINITIAL> "(?""-"? {                 /* ERROR: Unrecognized character after (? or (?- */
     $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNRECOGNIZED_PQH, $this->yytext());
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+    return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
 }
 <YYINITIAL> "(?<" {                    /* ERROR: Unrecognized character after (?< */
     $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNRECOGNIZED_PQLT, $this->yytext());
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+    return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
 }
 <YYINITIAL> "(?P" {                    /* ERROR: Unrecognized character after (?P */
     $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNRECOGNIZED_PQP, $this->yytext());
-    return new JLexToken(qtype_preg_yyParser::OPENBRACK, $error);
+    return new JLexToken(qtype_preg_parser::OPENBRACK, $error);
 }
 
 
@@ -1596,7 +1506,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $this->yybegin(self::YYCHARSET);
 }
 <YYINITIAL> "." {
-    $topitem = $this->opt_stack[$this->opt_count - 1];
+    $topitem = end($this->opt_stack);
     if ($this->options->preserveallnodes || $topitem->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_DOTALL)) {
         // The true dot matches everything.
         return $this->form_charset($this->yytext(), qtype_preg_charset_flag::TYPE_FLAG, qtype_preg_charset_flag::META_DOT);
@@ -1607,13 +1517,13 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 }
 <YYINITIAL> "|" {
     // Reset subexpressions numeration inside a (?|...) group.
-    $topitem = $this->opt_stack[$this->opt_count - 1];
-    if ($topitem->last_dup_subexpr_number != -1) {
-        $this->last_subexpr = $topitem->last_dup_subexpr_number;
+    $topitem = end($this->opt_stack);
+    if ($topitem->dup_subexpr_number != -1) {
+        $this->lastsubexpr = $topitem->dup_subexpr_number;
     }
     $alt = new qtype_preg_lexem();
     $alt->set_user_info($this->current_position_for_node(), array(new qtype_preg_userinscription('|')));
-    return new JLexToken(qtype_preg_yyParser::ALT, $alt);
+    return new JLexToken(qtype_preg_parser::ALT, $alt);
 }
 <YYINITIAL> "\a"|"\e"|"\f"|"\n"|"\r"|"\t" {
     $text = $this->yytext();
@@ -1624,7 +1534,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $char = $this->calculate_cx($text);
     if ($char === null) {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CX_SHOULD_BE_ASCII, $text);
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
     } else {
         return $this->form_charset($text, qtype_preg_charset_flag::TYPE_SET, $char);
     }
@@ -1636,7 +1546,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $subtype = $this->get_uprop_flag($str);
     if ($subtype === null) {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNKNOWN_UNICODE_PROPERTY, $str);
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
     } else {
         return $this->form_charset($text, qtype_preg_charset_flag::TYPE_FLAG, $subtype, $negative);
     }
@@ -1656,29 +1566,50 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
         $subtype = $this->get_uprop_flag($str);
         if ($subtype === null) {
             $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNKNOWN_UNICODE_PROPERTY, $str);
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+            return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
         } else {
             return $this->form_charset($text, qtype_preg_charset_flag::TYPE_FLAG, $subtype, $negative);
         }
     }
     return $res;
 }
+<YYINITIAL> \\0[0-9]?[0-9]? {
+    $text = $this->yytext();
+    $code = self::code_of_char_escape_sequence($text);
+    if ($code > qtype_preg_unicode::max_possible_code()) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_TOO_BIG, '0' . decoct($code));
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
+    } else if (0xd800 <= $code && $code <= 0xdfff) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_DISALLOWED, '0' . decoct($code));
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
+    } else {
+        return $this->form_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8($code));
+    }
+}
+<YYINITIAL> "\o{"[0-9]+"}" {
+    $text = $this->yytext();
+    $code = self::code_of_char_escape_sequence($text);
+    if ($code > qtype_preg_unicode::max_possible_code()) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_TOO_BIG, '0' . decoct($code));
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
+    } else if (0xd800 <= $code && $code <= 0xdfff) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_DISALLOWED, '0' . decoct($code));
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
+    } else {
+        return $this->form_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8($code));
+    }
+}
 <YYINITIAL> "\x"[0-9a-fA-F]?[0-9a-fA-F]? {
     $text = $this->yytext();
-    if ($this->yylength() < 3) {
-        $str = qtype_preg_unicode::substr($text, 1);
-        return $this->form_charset($text, qtype_preg_charset_flag::TYPE_SET, $str);
+    $code = self::code_of_char_escape_sequence($text);
+    if ($code > qtype_preg_unicode::max_possible_code()) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_TOO_BIG, '0x' . dechex($code));
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
+    } else if (0xd800 <= $code && $code <= 0xdfff) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_DISALLOWED, '0x' . dechex($code));
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
     } else {
-        $code = self::code_of_char_escape_sequence($text);
-        if ($code > qtype_preg_unicode::max_possible_code()) {
-            $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_TOO_BIG, '0x' . dechex($code));
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
-        } else if (0xd800 <= $code && $code <= 0xdfff) {
-            $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_DISALLOWED, '0x' . dechex($code));
-            return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
-        } else {
-            return $this->form_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8($code));
-        }
+        return $this->form_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8($code));
     }
 }
 <YYINITIAL> "\x{"[0-9a-fA-F]+"}" {
@@ -1686,10 +1617,10 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $code = self::code_of_char_escape_sequence($text);
     if ($code > qtype_preg_unicode::max_possible_code()) {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_TOO_BIG, '0x' . dechex($code));
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
     } else if (0xd800 <= $code && $code <= 0xdfff) {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_DISALLOWED, '0x' . dechex($code));
-        return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+        return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
     } else {
         return $this->form_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8($code));
     }
@@ -1722,18 +1653,19 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     return $this->form_charset($this->yytext(), qtype_preg_charset_flag::TYPE_SET, "\n", true);
 }
 <YYINITIAL> "\K" {
-    // TODO: reset start of match.
-    throw new Exception('\K is not implemented yet');
+    // \K resets start of match.
+    $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNKNOWN_ERROR, '\K is not implemented yet');
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
 }
 <YYINITIAL> "\R" {
-    // TODO: matches new line unicode sequences.
-    // \B, \R, and \X are not special inside a character class.
-    throw new Exception('\R is not implemented yet');
+    // \R matches new line unicode sequences.
+    $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNKNOWN_ERROR, '\R is not implemented yet');
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
 }
 <YYINITIAL> "\X" {
-    // TODO: matches  any number of Unicode characters that form an extended Unicode sequence.
-    // \B, \R, and \X are not special inside a character class.
-    throw new Exception('\R is not implemented yet');
+    // \X matches  any number of Unicode characters that form an extended Unicode sequence.
+    $error = $this->form_error(qtype_preg_node_error::SUBTYPE_UNKNOWN_ERROR, '\X is not implemented yet');
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
 }
 <YYINITIAL> "\b"|"\B" {
     $text = $this->yytext();
@@ -1742,15 +1674,17 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 <YYINITIAL> "\A" {
     return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_esc_a');
 }
-<YYINITIAL> "\z"|"\Z" {
-    $text = $this->yytext();
-    return $this->form_simple_assertion($text, 'qtype_preg_leaf_assert_esc_z', $text === '\Z');
+<YYINITIAL> "\z" {
+    return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_small_esc_z');
+}
+<YYINITIAL> "\Z" {
+    return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_capital_esc_z');
 }
 <YYINITIAL> "\G" {
     return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_esc_g');
 }
 <YYINITIAL> "^" {
-    $topitem = $this->opt_stack[$this->opt_count - 1];
+    $topitem = end($this->opt_stack);
     if ($this->options->preserveallnodes || $topitem->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_MULTILINE)) {
         // The ^ assertion is used "as is" only in multiline mode. Or if preserveallnodes is true.
         return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_circumflex');
@@ -1760,26 +1694,26 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     }
 }
 <YYINITIAL> "$" {
-    $topitem = $this->opt_stack[$this->opt_count - 1];
+    $topitem = end($this->opt_stack);
     if ($this->options->preserveallnodes || $topitem->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_MULTILINE)) {
         // The $ assertion is used "as is" only in multiline mode. Or if preserveallnodes is true.
         return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_dollar');
     } else if ($topitem->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_DOLLAR_ENDONLY)) {
         // Not multiline, but dollar endonly; the same as \z.
-        return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_esc_z', false);
+        return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_small_esc_z');
     } else {
         // Default case: the same as \Z.
-        return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_esc_z', true);
+        return $this->form_simple_assertion($this->yytext(), 'qtype_preg_leaf_assert_capital_esc_z');
     }
 }
 <YYINITIAL> "\c" {
     $error = $this->form_error(qtype_preg_node_error::SUBTYPE_C_AT_END_OF_PATTERN, '\c');
-    return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
 }
 <YYINITIAL> "\u"|"\U"|"\l"|"\L"|"\N{"{ALNUM}*"}" {
     $text = $this->yytext();
     $error = $this->form_error(qtype_preg_node_error::SUBTYPE_LNU_UNSUPPORTED, $text);
-    return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
 }
 <YYINITIAL> \\0[0-7]?[0-7]? {
     $text = $this->yytext();
@@ -1791,7 +1725,7 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
 }
 <YYINITIAL> \\ {                       /* ERROR: \ at the end of the pattern */
     $error = $this->form_error(qtype_preg_node_error::SUBTYPE_SLASH_AT_END_OF_PATTERN, '\\');
-    return new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+    return new JLexToken(qtype_preg_parser::PARSELEAF, $error);
 }
 <YYINITIAL> {ANY} {                 // Just to avoid exceptions.
     $text = $this->yytext();
@@ -1934,21 +1868,28 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $text = $this->yytext();
     $this->add_flag_to_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8(octdec(qtype_preg_unicode::substr($text, 1))));
 }
+<YYCHARSET> "\o{"[0-9]+"}" {
+    $text = $this->yytext();
+    $code = self::code_of_char_escape_sequence($text);
+    if ($code > qtype_preg_unicode::max_possible_code()) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_TOO_BIG, '0' . decoct($code), $this->charset);
+        $this->charset->userinscription[] = new qtype_preg_userinscription($text);
+    } else if (0xd800 <= $code && $code <= 0xdfff) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_DISALLOWED, '0' . decoct($code), $this->charset);
+    } else {
+        $this->add_flag_to_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8($code));
+    }
+}
 <YYCHARSET> "\x"[0-9a-fA-F]?[0-9a-fA-F]? {
     $text = $this->yytext();
-    if ($this->yylength() < 3) {
-        $str = qtype_preg_unicode::substr($text, 1);
-        $this->add_flag_to_charset($text, qtype_preg_charset_flag::TYPE_SET, $str);
+    $code = self::code_of_char_escape_sequence($text);
+    if ($code > qtype_preg_unicode::max_possible_code()) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_TOO_BIG, '0x' . dechex($code), $this->charset);
+        $this->charset->userinscription[] = new qtype_preg_userinscription($text);
+    } else if (0xd800 <= $code && $code <= 0xdfff) {
+        $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_DISALLOWED, '0x' . dechex($code), $this->charset);
     } else {
-        $code = self::code_of_char_escape_sequence($text);
-        if ($code > qtype_preg_unicode::max_possible_code()) {
-            $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_TOO_BIG, '0x' . dechex($code), $this->charset);
-            $this->charset->userinscription[] = new qtype_preg_userinscription($text);
-        } else if (0xd800 <= $code && $code <= 0xdfff) {
-            $error = $this->form_error(qtype_preg_node_error::SUBTYPE_CHAR_CODE_DISALLOWED, '0x' . dechex($code), $this->charset);
-        } else {
-            $this->add_flag_to_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8($code));
-        }
+        $this->add_flag_to_charset($text, qtype_preg_charset_flag::TYPE_SET, qtype_preg_unicode::code2utf8($code));
     }
 }
 <YYCHARSET> "\x{"[0-9a-fA-F]+"}" {
@@ -2026,7 +1967,6 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     $this->charset->userinscription[] = new qtype_preg_userinscription(']');
 
     $this->charset->set_user_info($position, $this->charset->userinscription);
-    $this->charset->israngecalculated = false;
     if ($this->charset_set !== '') {
         $flag = new qtype_preg_charset_flag;
         $flag->set_data(qtype_preg_charset_flag::TYPE_SET, new qtype_poasquestion_string($this->charset_set));
@@ -2041,9 +1981,9 @@ SIGN       = ("+"|"-")                                  // Sign of an integer.
     if (count($this->charset->userinscription) > 3 && $ui1->data == ':' && $ui2->data == ':') {
         $error = $this->form_error(qtype_preg_node_error::SUBTYPE_POSIX_CLASS_OUTSIDE_CHARSET, '', $this->charset);
         $error->set_user_info($position);
-        $res = new JLexToken(qtype_preg_yyParser::PARSELEAF, $error);
+        $res = new JLexToken(qtype_preg_parser::PARSELEAF, $error);
     } else {
-        $res = new JLexToken(qtype_preg_yyParser::PARSELEAF, $this->charset);
+        $res = new JLexToken(qtype_preg_parser::PARSELEAF, $this->charset);
     }
 
     $this->charset = null;

@@ -1,6 +1,6 @@
 <?php
 /**
- * Defines graph's node classes.
+ * Defines syntax tree tool's nodes.
  *
  * @copyright &copy; 2012 Oleg Sychev, Volgograd State Technical University
  * @author Terechov Grigory <grvlter@gmail.com>, Valeriy Streltsov <vostreltsov@gmail.com>
@@ -32,13 +32,18 @@ class qtype_preg_dot_node_context {
     public $insideusercluster = false;
     public $insideselectioncluster = false;
 
-    public function __construct($handler, $isroot, $rankdirlr = false, $selection = null) {
+    public $foldcoords;
+    public $isfold;
+
+    public function __construct($handler, $isroot, $rankdirlr = false, $selection = null, $foldcoords = null, $isfold = false) {
         $this->handler = $handler;
         $this->isroot = $isroot;
         $this->rankdirlr = $rankdirlr;
         $this->selection = $selection !== null
                          ? $selection
                          : new qtype_preg_position();
+        $this->foldcoords = $foldcoords;
+        $this->isfold = $isfold;
     }
 }
 
@@ -67,7 +72,7 @@ abstract class qtype_preg_syntax_tree_node {
      * Returns the name used for all graphs. The name usually follows the "digraph" keyword.
      */
     public static function get_graph_name() {
-        return 'qtype_preg_graph';
+        return 'qtype_preg_tree';
     }
 
     /**
@@ -108,9 +113,13 @@ abstract class qtype_preg_syntax_tree_node {
     public function dot_script($context) {
         $nodename = $this->pregnode->id;
         $dotscript = $nodename . ";\n";
+        $startselectioncluster = false;
 
         $startusercluster = !$context->insideusercluster && !$context->handler->is_node_generated($this->pregnode);
-        $startselectioncluster = !$context->insideselectioncluster && $this->is_selected($context);
+        //if($context->isfold === false) {
+            $startselectioncluster = !$context->insideselectioncluster && $this->is_selected($context);
+        //}
+
         $context->insideusercluster = $context->insideusercluster || $startusercluster;
         $context->insideselectioncluster = $context->insideselectioncluster || $startselectioncluster;
         if ($startusercluster) {
@@ -172,11 +181,14 @@ abstract class qtype_preg_syntax_tree_node {
         $color = $this->shape_color();
         $fontcolor = $this->font_color();
         $style = $this->style();
-        $id = $this->pregnode->id . ',' . $this->pregnode->position->indfirst . ',' . $this->pregnode->position->indlast;
+        $id = 'treeid_' . $this->pregnode->id . '_' . $this->pregnode->position->indfirst . '_' . $this->pregnode->position->indlast;
         $result = "id = \"$id\", label = \"$label\", tooltip = \"$tooltip\", shape = \"$shape\", color = \"$color\", fontcolor = \"$fontcolor\"";
         if ($context->handler->is_node_generated($this->pregnode)) {
             $style .= ', filled';
             $result .= ', fillcolor = lightgrey';
+        } else {
+            $style .= ', filled';
+            $result .= ', fillcolor = white';
         }
         $result .= ", style = \"$style\"";
         return '[' . $result . ']';
@@ -230,25 +242,44 @@ class qtype_preg_syntax_tree_operator extends qtype_preg_syntax_tree_node {
     }
 
     public function dot_script_inner($context) {
-        // Calculate the node name and style.
-        $nodename = $this->pregnode->id;
-        $style = $nodename . self::get_style($context) . ";\n";
-        $dotscript = $nodename . ";\n";
-        foreach ($this->operands as $operand) {
-            $newcontext = clone $context;
-            $newcontext->isroot = false;
-            $tmp = $operand->dot_script($newcontext);
-            $edgelabel = $this->label_for_edge($operand);
-            if ($edgelabel != '') {
-                $othernodename = $operand->pregnode->id;
-                $dotscript .= $nodename . '->' . $othernodename . "[label=\"$edgelabel\"];\n";
-                $dotscript .= $tmp[0];
+            // Calculate the node name and style.
+            $nodename = $this->pregnode->id;
+            $style = $nodename . self::get_style($context) . ";\n";
+            $dotscript = $nodename . ";\n";
+
+            //$currcoord = $this->pregnode->position->indfirst . ',' . $this->pregnode->position->indlast;
+            if(strpos($context->foldcoords, $this->pregnode->position->indfirst . ',' . $this->pregnode->position->indlast) === false) {
+                foreach ($this->operands as $operand) {
+                    $newcontext = clone $context;
+                    $newcontext->isroot = false;
+                    $tmp = $operand->dot_script($newcontext);
+                    $edgelabel = $this->label_for_edge($operand);
+                    if ($edgelabel != '') {
+                        $othernodename = $operand->pregnode->id;
+                        $dotscript .= $nodename . '->' . $othernodename . "[label=\"$edgelabel\"];\n";
+                        $dotscript .= $tmp[0];
+                    } else {
+                        $dotscript .= $nodename . '->' . $tmp[0];
+                    }
+                    $style .= $tmp[1];
+                }
             } else {
-                $dotscript .= $nodename . '->' . $tmp[0];
+                $indfirst = $this->pregnode->position->indfirst;
+                $length =  $this->pregnode->position->indlast - $this->pregnode->position->indfirst + 1;
+                if ($indfirst < 0) {
+                    $indfirst = 0;
+                }
+                if ($this->pregnode->position->indlast < 0) {
+                    $length = 0;
+                }
+                $tooltip = substr($context->handler->get_regex(),
+                                    $indfirst,
+                                    $length);
+                $tmpcoord = "treeid_" . $this->pregnode->id . '_' . $this->pregnode->position->indfirst . '_' . $this->pregnode->position->indlast;
+                $dotscript .= $nodename . "[id=\"" . $tmpcoord . "\"" . "label=\"...\", tooltip=\"" . $tooltip . "\", style=\"dotted\"];\n";
             }
-            $style .= $tmp[1];
-        }
-        return array($dotscript, $style);
+
+            return array($dotscript, $style);
     }
 
     public function label() {
@@ -288,7 +319,7 @@ class qtype_preg_syntax_tree_leaf_charset extends qtype_preg_syntax_tree_leaf {
             count($this->pregnode->userinscription) > 1)                 // [complex charset]
         {
             // Flag or complex charset - return "as is".
-            return qtype_preg_authoring_tool::string_to_html(qtype_preg_authoring_tool::string_to_html(parent::label()));	// TODO: should be parent::label() (graphviz bug).
+            return parent::label();
         }
 
         if ($this->needs_highlighting()) {
@@ -297,7 +328,7 @@ class qtype_preg_syntax_tree_leaf_charset extends qtype_preg_syntax_tree_leaf {
         }
         // A single character - return the actual value.
         if (!$ui->is_valid_escape_sequence() && $ui->data != '\\' && $ui->data[0] == '\\') {
-            return textlib::substr($ui->data, 1);
+            return core_text::substr($ui->data, 1);
         }
         return $ui->data;
     }
@@ -367,14 +398,22 @@ class qtype_preg_syntax_tree_leaf_backref extends qtype_preg_syntax_tree_leaf {
     }
 
     public function tooltip() {
-        return get_string($this->pregnode->lang_key(true), 'qtype_preg', $this->pregnode->number);
+        //return get_string($this->pregnode->lang_key(true), 'qtype_preg', $this->pregnode->number);
+        $postfix = $this->pregnode->isrecursive ? '_recursive' : '';
+        return get_string($this->pregnode->lang_key(true) . $postfix, 'qtype_preg', $this->pregnode->number);
     }
 }
 
-class qtype_preg_syntax_tree_leaf_recursion extends qtype_preg_syntax_tree_leaf {
+class qtype_preg_syntax_tree_leaf_subexpr_call extends qtype_preg_syntax_tree_leaf {
 
-    public function label() {
-        return get_string($this->pregnode->lang_key(true), 'qtype_preg', $this->pregnode->number);
+    /*public function label() {
+        //return get_string($this->pregnode->lang_key(true), 'qtype_preg', $this->pregnode->number);
+        return $this->pregnode->userinscription;
+    }*/
+
+    public function tooltip() {
+        $postfix = $this->pregnode->isrecursive ? '_recursive' : '';
+        return get_string($this->pregnode->lang_key(true) . $postfix, 'qtype_preg', $this->pregnode->number);
     }
 }
 
@@ -455,9 +494,9 @@ class qtype_preg_syntax_tree_node_cond_subexpr extends qtype_preg_syntax_tree_op
         $count = count($this->operands);
         $shift = $this->pregnode->is_condition_assertion() ? 1 : 0;
         if ($operand === $this->operands[$shift]) {
-            return textlib::strtolower(get_string('yes', 'moodle'));
+            return core_text::strtolower(get_string('yes', 'moodle'));
         } else if ($shift + 1 < $count && $operand === $this->operands[$shift + 1]) {
-            return textlib::strtolower(get_string('no', 'moodle'));
+            return core_text::strtolower(get_string('no', 'moodle'));
         }
         return '';
     }
@@ -473,5 +512,3 @@ class qtype_preg_syntax_tree_node_error extends qtype_preg_syntax_tree_operator 
         return 'red';
     }
 }
-
-?>

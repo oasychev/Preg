@@ -15,7 +15,7 @@ $string['charhintpenalty_help'] = 'Penalty for getting the one-character hint. T
 $string['lexemhintpenalty'] = 'Penalty for the next lexem hint';
 $string['lexemhintpenalty_help'] = 'Penalty for getting the next lexem hint. Typically will be greater than usual Moodle question penalty (which applies to any new attempt to answer question without hints) and next character one. These penalties are mutually exclusive.';
 $string['correctanswer'] = 'Correct answer';
-$string['correctanswer_help'] = 'Enter a correct answer (not a regular expression) to be shown to students. If you leave it empty the matching engine will try to generate a correct answer itself, taking heed to get the closest one to the student\'s response. For now only NFA engine can generate correct answers.';
+$string['correctanswer_help'] = 'Enter a correct answer (not a regular expression) to be shown to students. If you leave it empty the matching engine will try to generate a correct answer itself, taking heed to get the closest one to the student\'s response. For now only FA engine can generate correct answers.';
 $string['debugheading'] = 'Debug settings';
 $string['defaultenginedescription'] = 'Matching engine selected by default when creating a new question';
 $string['defaultenginelabel'] = 'Default matching engine';
@@ -25,14 +25,14 @@ $string['defaultnotationdescription'] = 'Notation selected by default when creat
 $string['defaultnotationlabel'] = 'Default notation';
 $string['description_tool'] = 'Description';
 $string['description_tool_help'] = 'Here you can see description of regular expression. Pressing the node of the tree marks corresponding subgraph marks corresponding part of description with yellow color.';
-$string['dfa_matcher'] = 'Deterministic finite state automata';
 $string['doterror'] = 'Can\'t draw {$a->name} for this regex';
 $string['engine'] = 'Matching engine';
-$string['engine_help'] = '<p>There is no \'best\' matching engine, so you can choose the engine that fits the particular question best.</p><p>Native <b>PHP preg matching engine</b> works using preg_match() function from PHP language. It\'s almost 100% bug-free and able to work with full PCRE syntax, but can\'t support advanced features (showing partial matches and hinting).</p><p>The <b>NFA matching engine</b> and the <b>DFA matching engine</b> are engines that use custom matching code. They support partial matching and hinting, but don\'t support lookaround assertions (you\'ll be notified when trying to save a question with unsupported expressions) and potentially can contain bugs.</p><p>If the difference between engines is too hard to you, just try them all to see how their capabilities suit your needs. If one engine fails in a question then try another engines to see if they can handle it better.</p><p>The NFA engine is probably the best choice if you don\'t use lookaround assertions.</p><p>Avoid using the DFA engine for the new questions, as it is deprecated. contains more bugs than other two, and lacking development in the last time. Use it only when you can\'t get what you need using other engines.</p>';
+$string['engine_help'] = '<p>There is no \'best\' matching engine, so you can choose the engine that fits the particular question best.</p><p>Native <b>PHP preg matching engine</b> works using preg_match() function from PHP language. It\'s almost 100% bug-free and able to work with full PCRE syntax, but can\'t support advanced features (showing partial matches and hinting).</p><p><b>FA matching engine</b> uses custom matching code. It supports partial matching and hinting, but don\'t support lookaround assertions (you\'ll be notified when trying to save a question with unsupported expressions) and potentially can contain bugs.</p><p>If the difference between engines is too hard to you, just try them all to see how their capabilities suit your needs. If one engine fails in a question then try another engines to see if they can handle it better.</p><p>FA engine is probably the best choice if you don\'t use lookaround assertions.</p>';
 $string['exactmatch'] = 'Exact matching';
 $string['exactmatch_help'] = '<p>By default regular expression matching returns true if there is at least one match in the given string (answer). Exact matching means that the match must be the entire string.</p><p>Set this to Yes, if you write regular expressions for full student\'s answers. Setting this to No gives you additional flexibility: you can specify an answer with low (or zero) grade to catch common errors and give comments on them. You still can specify exact matches for some of your regular expressions if you start them with ^ and end with $.</p>';
 $string['explaining_graph_tool'] = 'Explaining graph';
-$string['explaining_graph_tool_help'] = 'Here you can see explaining graph. Pressing the node of the tree marks corresponding subgraph with dark green rectangle.';
+$string['explaining_graph_tool_help'] = 'Here you can see explaining graph. Pressing the node of the tree marks corresponding subgraph with dark green rectangle. You can also select multiple nodes at once rectangle, enabling mode selection rectangle.';
+$string['fa_matcher'] = 'Finite state automata';
 $string['hintcolouredstring'] = 'matched part of the response';
 $string['hintgradeborder'] = 'Hint grade border';
 $string['hintgradeborder_help'] = 'Answers with the grade less than the hint grade border won\'t be used in hinting.';
@@ -45,7 +45,6 @@ $string['lexemusername'] = 'Student-visible name for lexem';
 $string['lexemusername_help'] = 'Your students probably won\'t know that an atomic part of the language they learn is called <b>lexem</b>. They may prefer to call it "word" or "number" or something. You may define a name for lexem that would be shown on the "Hint next lexem" button there.';
 $string['maxerrorsshowndescription'] = 'Maximum number of errors shown for each regular expression in the question editing form';
 $string['maxerrorsshownlabel'] = 'Maximum number of errors shown';
-$string['nfa_matcher'] = 'Nondeterministic finite state automata';
 $string['nocorrectanswermatch'] = 'No maximum grade regular expression matches the correct answer';
 $string['nohintgradeborderpass'] = 'No answer has a grade greater or equal the hint grade border. This disables hinting.';
 $string['notation'] = 'Regular expression notation';
@@ -68,13 +67,15 @@ $string['questioneditingheading'] = 'Question editing settings';
 $string['regex_handler'] = 'Regex handler';
 $string['subexpression'] = 'Subpattern';
 $string['syntax_tree_tool'] = 'Syntax tree';
-$string['syntax_tree_tool_help'] = 'Here you can see syntax tree of you expression. Pressing the node of tree marks corresponding subtree, subgraph and corresponding part of description.';
+$string['syntax_tree_tool_collapsing_mode'] = 'Collapsing mode';
+$string['syntax_tree_tool_help'] = 'Here you can see syntax tree of you expression. Pressing the node of tree marks corresponding subtree, subgraph and corresponding part of description. You can also collapse / expand the nodes by turning on convolution.';
 $string['tobecontinued'] = '...';
 $string['toolargequant'] = 'Too large finite quantifier';
 $string['toomanyerrors'] = '.......{$a} more errors';
 $string['lazyquant'] = 'Lazy quantifiers';
 $string['greedyquant'] = 'Greedy quantifiers';
 $string['possessivequant'] = 'Possessive quantifiers';
+$string['unallowedhint'] = 'Selected hint not allowed due to restrictions in question settings. Please set "Allow {$a} hinting" to "yes" to allow it. Selected matching engine could affect availability of hints.';
 $string['ungreedyquant'] = 'Ungreedy quantifiers';
 $string['unsupported'] = '{$a->nodename} in position from {$a->linefirst}:{$a->colfirst} to {$a->linelast}:{$a->collast} is not supported by {$a->engine}.';
 $string['unsupportedmodifier'] = 'Error: modifier {$a->modifier} isn\'t supported by the {$a->classname}.';
@@ -92,7 +93,7 @@ $string['leaf_charset_except']         = 'any character except';
 $string['leaf_meta']                   = 'meta-character or escape-sequence';
 $string['leaf_assert']                 = 'simple assertion';
 $string['leaf_backref']                = 'backreference';
-$string['leaf_recursion']              = 'recursion';
+$string['leaf_subexpr_call']           = 'subexpression call';
 $string['leaf_control']                = 'control sequence';
 $string['leaf_options']                = 'modifier';   // TODO: remove?
 $string['node_finite_quant']           = 'finite quantifier';
@@ -108,7 +109,8 @@ $string['node_error']                  = 'syntax error';
 $string['empty_leaf_meta']             = 'emptiness';
 $string['esc_b_leaf_assert']           = 'a word boundary';
 $string['esc_a_leaf_assert']           = 'start of the string';
-$string['esc_z_leaf_assert']           = 'end of the string';
+$string['small_esc_z_leaf_assert']     = 'end of the string';
+$string['capital_esc_z_leaf_assert']   = 'end of the string';
 $string['esc_g_leaf_assert']           = 'first matching position in the string';
 $string['circumflex_leaf_assert']      = 'start of the string';
 $string['dollar_leaf_assert']          = 'end of the string';
@@ -192,17 +194,14 @@ $string['leaf_charset_error'] = 'incorrect character set';
 $string['error_PCREincorrectregex']              = 'Incorrect regular expression - syntax error! Consult <a href="http://pcre.org/pcre.txt">PCRE documentation</a> for more information.';
 $string['error_duringauthoringtool']             = 'There were errors while trying to build {$a}:';
 
-/******* DFA and NFA limitations *******/
+/******* FA limitations *******/
 $string['engine_heading_descriptions'] = 'Matching regular expressions can be time and memory consuming. These settings allow you to control limits of time and memory usage by the matching engines. Increase them when you get messages that the regular expression is too complex, but do mind your server\'s performance (you may also want to increase PHP time and memory limits). Decrease them if you get blank page when saving or running a preg question.';
 $string['too_large_fa'] = 'Regular expression is too complex to be matched by {$a->engine} due to the time and/or memory limits. Please try another matching engine, ask your administrator to <a href="{$a->link}"> increase time and memory limits</a> or simplify you regular expression.';
 $string['fa_state_limit'] = 'Automata size limit: states';
 $string['fa_transition_limit'] = 'Automata size limit: transitions';
-$string['dfa_settings_heading'] = 'Deterministic finite state automata engine settings';
-$string['nfa_settings_heading'] = 'Nondeterministic finite state automata engine settings';
-$string['dfa_state_limit_description'] = 'Allows you to tune time and memory limits for the DFA engine when matching complex regexes';
-$string['nfa_state_limit_description'] = 'Allows you to tune time and memory limits for the NFA engine when matching complex regexes';
-$string['dfa_transition_limit_description'] = 'Maximum number of transitions in DFA';
-$string['nfa_transition_limit_description'] = 'Maximum number of transitions in NFA';
+$string['fa_settings_heading'] = 'Finite state automata engine settings';
+$string['fa_state_limit_description'] = 'Allows you to tune time and memory limits for the FA engine when matching complex regexes';
+$string['fa_transition_limit_description'] = 'Maximum number of transitions in FA';
 
 /********** Strings for authoring tools form**********************/
 $string['authoring_form_page_header'] = 'Regex constructor';
@@ -221,6 +220,8 @@ $string['authoring_form_testing_header'] = 'Regular expression testing';
 $string['authoring_form_testing_header_help'] = 'Here you can input some strings (one per line) to test your regex. After clicking "Check the string(s)" you\'ll see results on the right: matched parts are green, unmatched parts are red. Icon shows you whether given string matched entire regex (green check mark) or not (reg cross).';
 $string['authoring_form_testing_textarea'] = 'Input strings to match (one per line)';
 $string['authoring_form_check_strings'] = 'Check the string(s)';
+$string['authoring_form_rect_selection_mode'] =  'Rectangle selection mode';
+$string['authoring_form_rect_selection_select'] =  'Select';
 
 // Strings for node description
 $string['description_operand'] = 'operand';
@@ -230,19 +231,22 @@ $string['description_empty_leaf_meta'] = 'nothing';
 // TYPE_LEAF_ASSERT
 $string['description_esc_b_leaf_assert'] = 'a word boundary';
 $string['description_esc_a_leaf_assert'] = 'start of the string';
-$string['description_esc_z_leaf_assert'] = 'end of the string';
+$string['description_small_esc_z_leaf_assert'] = 'end of the string';
+$string['description_capital_esc_z_leaf_assert'] = 'end of the string';
 $string['description_esc_g_leaf_assert'] = 'first matching position in the string';
 $string['description_circumflex_leaf_assert'] = 'start of the string';
 $string['description_dollar_leaf_assert'] = 'end of the string';
 $string['description_esc_b_leaf_assert_neg'] = 'not a word boundary';
-$string['description_esc_z_leaf_assert_neg'] = 'end of the string';
 // TYPE_LEAF_BACKREF
-$string['description_leaf_backref'] = 'text that matched subpattern #{$a}';
-$string['description_leaf_backref_name'] = 'text that matched subpattern "{$a}"';
-// TYPE_LEAF_RECURSION
-$string['description_leaf_recursion'] = 'recursive match with subpattern #{$a}';
-$string['description_leaf_recursion_all'] = 'recursive match with whole regular expression';
-$string['description_leaf_recursion_name'] = 'recursive match with subpattern "{$a}"';
+$string['description_leaf_backref'] = 'text that matched by subpattern #{$a}';
+$string['description_leaf_backref_name'] = 'text that matched by subpattern "{$a}"';
+// TYPE_LEAF_SUBEXPR_CALL
+$string['description_leaf_subexpr_call'] = 'call of the subpattern #{$a}';
+$string['description_leaf_subexpr_call_all'] = 'call of the whole regular expression';
+$string['description_leaf_subexpr_call_name'] = 'call of the subpattern "{$a}"';
+$string['description_leaf_subexpr_call_recursive'] = 'recursive call of the subpattern #{$a}';
+$string['description_leaf_subexpr_call_all_recursive'] = 'recursive call of the whole regular expression';
+$string['description_leaf_subexpr_call_name_recursive'] = 'recursive call of the subpattern "{$a}"';
 // TYPE_LEAF_CONTROL
 $string['description_accept_leaf_control'] = 'force successful subpattern match';
 $string['description_fail_leaf_control'] = 'force fail';
@@ -318,11 +322,12 @@ $string['description_onceonly_node_subexpr_name'] = 'once checked subpattern "{$
 $string['description_grouping_node_subexpr'] = 'grouping: [ {$a->firstoperand} ]';
 $string['description_duplicate_node_subexpr'] = 'grouping (reset group numbers for capturing groups in each alternation): [ {$a->firstoperand} ]';
 // TYPE_NODE_COND_SUBEXPR ({$a->firstoperand} - first option; {$a->secondoperand} - second option; {$a->cond} - condition )
-$string['description_subexpr_node_cond_subexpr'] = 'if the subpattern #{$a->number} has been successfully matched then check: [{$a->firstoperand}]{$a->else}';
-$string['description_subexpr_node_cond_subexpr_name'] = 'if the subpattern "{$a->name}" has been successfully matched then check: [{$a->firstoperand}]{$a->else}';
-$string['description_recursion_node_cond_subexpr'] = 'if the pattern #{$a->number} has been successfully recursively matched then check: [{$a->firstoperand}]{$a->else}';
-$string['description_recursion_node_cond_subexpr_all'] = 'if the whole pattern has been successfully recursively matched then check: [{$a->firstoperand}]{$a->else}';
-$string['description_recursion_node_cond_subexpr_name'] = 'if the pattern "{$a->name}" has been successfully recursively matched then check: [{$a->firstoperand}]{$a->else}';
+$string['description_subexpr_node_cond_subexpr'] = 'the subpattern #{$a->number} has been successfully matched';
+$string['description_subexpr_node_cond_subexpr_name'] = 'the subpattern "{$a->name}" has been successfully matched';
+$string['description_recursion_node_cond_subexpr'] = 'the pattern #{$a->number} is in recursive matching';
+$string['description_recursion_node_cond_subexpr_all'] = 'the whole pattern is in recursive matching';
+$string['description_recursion_node_cond_subexpr_name'] = 'the pattern "{$a->name}" is in recursive matching';
+$string['description_subexpr_node_cond_subexpr_wrapper'] = 'if {$a->cond} then check: [{$a->firstoperand}]{$a->else}';
 $string['description_define_node_cond_subexpr'] = 'definition of {$a->firstoperand}';
 $string['description_node_cond_subexpr'] = 'if {$a->cond} then check: [{$a->firstoperand}]{$a->else}';
 $string['description_node_cond_subexpr_else'] = ' else check: [{$a->secondoperand}]';
@@ -697,3 +702,6 @@ $string['explain_any_char'] = 'Any character from';
 $string['explain_any_char_except'] = 'Any character except';
 $string['explain_begin'] = 'begin';
 $string['explain_end'] = 'end';
+$string['explain_true'] = 'true';
+$string['explain_false'] = 'false';
+

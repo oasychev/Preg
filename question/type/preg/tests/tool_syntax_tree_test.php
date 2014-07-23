@@ -171,11 +171,11 @@ class qtype_preg_tool_syntax_tree_test extends PHPUnit_Framework_TestCase {
 
         $node = $this->get_node('\z');
         $this->assertEquals($node->label(), '\z');
-        $this->assertEquals($node->tooltip(), get_string(qtype_preg_leaf_assert::SUBTYPE_ESC_Z, 'qtype_preg'));
+        $this->assertEquals($node->tooltip(), get_string(qtype_preg_leaf_assert::SUBTYPE_SMALL_ESC_Z, 'qtype_preg'));
 
         $node = $this->get_node('\Z');
         $this->assertEquals($node->label(), '\Z');
-        $this->assertEquals($node->tooltip(), get_string(qtype_preg_leaf_assert::SUBTYPE_ESC_Z, 'qtype_preg'));
+        $this->assertEquals($node->tooltip(), get_string(qtype_preg_leaf_assert::SUBTYPE_CAPITAL_ESC_Z, 'qtype_preg'));
 
         $node = $this->get_node('\G');
         $this->assertEquals($node->label(), '\G');
@@ -200,7 +200,7 @@ class qtype_preg_tool_syntax_tree_test extends PHPUnit_Framework_TestCase {
         $tree = new qtype_preg_syntax_tree_tool('(?<name>body)');
         $node = $tree->get_dst_root();
         $this->assertEquals($node->label(), '(?<name>...) #1');
-        $this->assertEquals($node->tooltip(), 'subexpression "name" #1');
+        $this->assertEquals($node->tooltip(), 'subpattern "name" #1');
     }
 
     function test_label_finite_quant() {
@@ -275,8 +275,7 @@ class qtype_preg_tool_syntax_tree_test extends PHPUnit_Framework_TestCase {
 
     function test_syntax_errors() {
         $tree = new qtype_preg_syntax_tree_tool('a(');
-        /*$json = array();
-        $tree->generate_json($json);*/
+        //$json = $tree->generate_json($json);
         //var_dump($tree->get_dst_root()->dot_script(new qtype_preg_dot_node_context($tree, true)));
     }
  }

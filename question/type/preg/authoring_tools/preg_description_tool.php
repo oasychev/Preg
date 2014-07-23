@@ -15,8 +15,7 @@
 // along with Moodle.  If not, see <http:// www.gnu.org/licenses/>.
 
 /**
- * Defines handler for generating description of reg exp
- * Also defines specific tree, containing methods for generating descriptions of current node
+ * Defines handler for regex description tool
  *
  * @copyright &copy; 2012 Oleg Sychev, Volgograd State Technical University
  * @author Pahomov Dmitry
@@ -164,13 +163,20 @@ class qtype_preg_description_tool extends qtype_preg_authoring_tool {
         return 'description';
     }
 
+    public function generate_html() {
+        if ($this->regex->string() == '') {
+            return $this->data_for_empty_regex();
+        } else if ($this->errors_exist() || $this->get_ast_root() == null) {
+            return $this->data_for_unaccepted_regex();
+        }
+        return $this->data_for_accepted_regex();
+    }
+
     /**
-     * Generate description
-     *
-     * @param array $json contains text of description
+     * Overloaded from qtype_preg_authoring_tool.
      */
-    public function generate_json_for_accepted_regex(&$json) {
-        $json[$this->json_key()] = $this->default_description();
+    public function data_for_accepted_regex() {
+        return $this->default_description();
     }
 
     public function options() {
@@ -202,12 +208,15 @@ class qtype_preg_description_tool extends qtype_preg_authoring_tool {
         $this->options->rangelengthmax = (int)$rangelengthmax;
 
         $string = '';
-        if (isset($this->dst_root)) {
-            $string = $this->dst_root->description($numbering_pattern, null, null);
+        if (isset($this->dstroot)) {
+            $string = $this->dstroot->description($numbering_pattern, null, null);
             $string = preg_replace('%;((?:</span>)?)]%u', '\1]', $string);   // Postprocessing
         }
         // put string into $wholepattern
-        if (!empty($wholepattern)) {
+        if (empty($wholepattern) || $wholepattern === '%s') { // TODO - mb place this string to lang?
+            $wholepattern = '<span style="background: white">%s</span>';
+        }
+        if ($wholepattern !== '%%tests%%') {
             $string = qtype_poasquestion_string::replace('%s', $string, $wholepattern);
         }
         $this->options = $backupoptions; // restore original options
@@ -225,7 +234,7 @@ class qtype_preg_description_tool extends qtype_preg_authoring_tool {
      * for testing
      */
     public function form_description($form) {
-        $result = $this->dst_root->description('%s', null, $form);
+        $result = $this->dstroot->description('%s', null, $form);
         return $result;
     }
 }

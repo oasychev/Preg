@@ -14,7 +14,9 @@ require_once($CFG->libdir . '/formslib.php');
 require_once($CFG->dirroot . '/question/type/preg/authoring_tools/preg_syntax_tree_nodes.php');
 require_once($CFG->dirroot . '/question/type/preg/authoring_tools/preg_regex_testing_tool.php');
 require_once($CFG->dirroot . '/question/type/preg/authoring_tools/preg_textarea.php');
+require_once($CFG->dirroot . '/question/type/preg/authoring_tools/preg_explaining_graph_nodes.php');
 require_once($CFG->dirroot . '/question/type/preg/question.php');
+require_once($CFG->dirroot . '/question/type/preg/questiontype.php');
 require_once($CFG->dirroot . '/question/type/preg/preg_hints.php');
 
 class qtype_preg_authoring_form extends moodleform {
@@ -32,11 +34,18 @@ class qtype_preg_authoring_form extends moodleform {
         global $CFG;
         global $PAGE;
 
+        $PAGE->requires->js('/question/type/poasquestion/jquery.panzoom.js');
         $PAGE->requires->js('/question/type/poasquestion/jquery-textrange.js');
+        $PAGE->requires->js('/question/type/poasquestion/interface.js');
+        /*$PAGE->requires->css('/question/type/poasquestion/shadow.css');
+        $PAGE->requires->css('/question/type/poasquestion/rect.css');*/
 
         // Create the form.
         $qtype = new qtype_preg();
         $mform = $this->_form;
+
+        $mform->addElement('html', '<link href="' . $CFG->wwwroot . '/question/type/poasquestion/shadow.css" id="SL_resources" rel="stylesheet" type="text/css">');
+        $mform->addElement('html', '<link href="' . $CFG->wwwroot . '/question/type/poasquestion/rect.css" id="SL_rect" rel="stylesheet" type="text/css">');
 
         // Add header.
         $mform->addElement('html', '<div align="center"><h2>' . get_string('authoring_form_page_header', 'qtype_preg') . '</h2></div>');
@@ -79,7 +88,7 @@ class qtype_preg_authoring_form extends moodleform {
 
         $mform->addElement('selectyesno', 'exactmatch_auth', get_string('exactmatch', 'qtype_preg'));
         $mform->addHelpButton('exactmatch_auth', 'exactmatch', 'qtype_preg');
-        $mform->setDefault('exactmatch_auth', 1);
+        $mform->setDefault('exactmatch_auth', 0);
 
         $mform->addElement('select', 'usecase_auth', get_string('casesensitive', 'qtype_shortanswer'), array(get_string('caseno', 'qtype_shortanswer'), get_string('caseyes', 'qtype_shortanswer')));
 
@@ -92,26 +101,37 @@ class qtype_preg_authoring_form extends moodleform {
         $radiotreeorientationsarray = array();
         $radiotreeorientationsarray[] =& $mform->createElement('radio', 'authoring_tools_tree_orientation', '', get_string('vertical', 'editor'), 'vertical', null);
         $radiotreeorientationsarray[] =& $mform->createElement('radio', 'authoring_tools_tree_orientation', '', get_string('horizontal', 'editor'), 'horizontal', null);
+        $radiotreeorientationsarray[] =& $mform->createElement('checkbox', 'tree_folding_mode', '', get_string('syntax_tree_tool_collapsing_mode', 'qtype_preg'), '', null);
+        $radiotreeorientationsarray[] =& $mform->createElement('hidden', 'tree_fold_node_points', '');
+        $radiotreeorientationsarray[] =& $mform->createElement('hidden', 'tree_selected_node_points', '');
+        $mform->setType('tree_fold_node_points', PARAM_RAW);
+        $mform->setType('tree_selected_node_points', PARAM_RAW);
         $mform->addGroup($radiotreeorientationsarray, 'tree_orientation_radioset', '', array(' '), false);
         $mform->setDefault('authoring_tools_tree_orientation', 'vertical');
 
         // Add generated map.
-        $mform->addElement('html', '<div id="tree_map" ></div></br>');
-        $mform->addElement('html', '<div style="max-height:400px;position:relative;overflow:auto !important;width:100%;max-width:100%" id="tree_hnd">' .
+        $mform->addElement('html', '<div style="max-height:400px;position:relative;overflow:auto !important;max-width:100%" id="tree_hnd">' .
                                         '<div id="tree_err"></div>' .
-                                        '<div style="width:10px">' .
-                                            '<img src="" id="tree_img" usemap="#' . qtype_preg_syntax_tree_node::get_graph_name() . '" alt="' . get_string('authoring_form_tree_build', 'qtype_preg') . '" />' .
-                                        '</div></div></br>');
+                                            '<div id="tree_img" class="preg_img_panzoom" title="' . get_string('authoring_form_tree_build', 'qtype_preg') . '">&nbsp;</div>' .
+                                        '</div></br>');
 
         // Add explaining graph tool.
         $mform->addElement('header', 'regex_graph_header', get_string('explaining_graph_tool', 'qtype_preg'));
         $mform->setExpanded('regex_graph_header', (bool)get_user_preferences('qtype_preg_regex_graph_expanded', true));
         $mform->addHelpButton('regex_graph_header', 'explaining_graph_tool', 'qtype_preg');
-        $mform->addElement('html', '<div style="max-height:400px;position:relative;overflow:auto !important;width:100%;max-width:100%" id="graph_hnd">' .
-                                        '<div id="graph_err"></div>' .
-                                        '<div style="width:10px">' .
-                                            '<img src="" id="graph_img" alt="' . get_string('authoring_form_graph_build', 'qtype_preg') . '" />' .
-                                        '</div></div></br>');
+
+        $graphselectionarray = array();
+        $graphselectionarray[] =& $mform->createElement('checkbox', 'graph_selection_mode', '', get_string('authoring_form_rect_selection_mode', 'qtype_preg'), '', null);
+        //$graphselectionarray[] =& $mform->createElement('button', 'graph_send_select', get_string('authoring_form_rect_selection_select', 'qtype_preg'));
+        $mform->addGroup($graphselectionarray, 'graph_selection', '', array(' '), false);
+
+        $mform->addElement('html', '<div style="max-height:400px;position:relative;overflow:auto !important;width:1000px;max-width:100%" id="graph_hnd">' .
+                                       '<div id="graph_err"></div>' .
+                                       '<div id="graph_img" class="preg_img_panzoom" title="' . get_string('authoring_form_graph_build', 'qtype_preg') . '">&nbsp;</div>' .
+                                       '<div id="resizeGraph">' .
+                                       '</div>' .
+                                   '</div></br>');
+        //$mform->addElement('html', $abc);
 
         // Add description tool.
         $mform->addElement('header', 'regex_description_header', get_string('description_tool', 'qtype_preg'));

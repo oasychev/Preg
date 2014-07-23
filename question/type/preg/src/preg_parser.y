@@ -1,10 +1,11 @@
 %name qtype_preg_
-%include{
+%include {
     global $CFG;
     require_once($CFG->dirroot . '/question/type/poasquestion/poasquestion_string.php');
     require_once($CFG->dirroot . '/question/type/preg/preg_nodes.php');
     require_once($CFG->dirroot . '/question/type/preg/preg_regex_handler.php');
 }
+%declare_class {class qtype_preg_parser}
 %include_class {
     // Root of the Abstract Syntax Tree (AST).
     private $root;
@@ -16,10 +17,8 @@
     private $id_counter;
     // Counter of subpatterns.
     private $subpatt_counter;
-    // Followpos map.
-    private $followpos;
-    // Max difference (right - left).
-    private $max_finite_quant_borders_difference;   // В принципе это костыль; когда ДКА будет получаться из НКА - удалить это.
+    // Map subpattern number => subpattern node.
+    private $subpatt_map;
 
     public function __construct($handlingoptions = null) {
         $this->root = null;
@@ -30,8 +29,7 @@
         $this->handlingoptions = $handlingoptions;
         $this->id_counter = 0;
         $this->subpatt_counter = 0;
-        $this->followpos = array();
-        $this->max_finite_quant_borders_difference = 0;
+        $this->subpatt_map = array();
     }
 
     public function get_root() {
@@ -55,15 +53,11 @@
     }
 
     public function get_max_subpatt() {
-        return $this->subpatt_counter;
+        return $this->subpatt_counter - 1;
     }
 
-    public function get_followpos() {
-        return $this->followpos;
-    }
-
-    public function get_max_finite_quant_borders_difference() {
-        return $this->max_finite_quant_borders_difference;
+    public function get_subpatt_map() {
+        return $this->subpatt_map;
     }
 
     /**
@@ -111,7 +105,7 @@
         $condbranch = new qtype_preg_node_assert($subtype);
         $condbranch->operands = array($assertbody);
         $condbranch->set_user_info($node->position->compose($assertbody->position)->add_chars_left(2)->add_chars_right(1),
-                                   array(new qtype_preg_userinscription(textlib::substr($node->userinscription[0], 2) . '...)')));
+                                   array(new qtype_preg_userinscription(core_text::substr($node->userinscription[0], 2) . '...)')));
 
         $node->operands = array($condbranch);
 
@@ -161,6 +155,7 @@
     protected function assign_subpatts($node) {
         if ($node->is_subpattern() || $node === $this->root) {
             $node->subpattern = $this->subpatt_counter++;
+            $this->subpatt_map[$node->subpattern] = $node;
         }
         if (is_a($node, 'qtype_preg_operator')) {
             foreach ($node->operands as $operand) {
@@ -178,6 +173,28 @@
         }
     }
 
+    /**
+     * Calculates $isrecursive for all qtype_preg_leaf_subexpr_call instances.
+     */
+    protected function detect_recursive_subexpr_calls($node, $currentsubexprs = array(0)) {
+        if ($node->type == qtype_preg_node::TYPE_LEAF_SUBEXPR_CALL) {
+            $node->isrecursive = in_array($node->number, $currentsubexprs);
+        }
+
+        $newsubexprs = $currentsubexprs;
+        if ($node->type == qtype_preg_node::TYPE_NODE_SUBEXPR) {
+            if ($node->number != -1 && !in_array($node->number, $newsubexprs)) {
+                $newsubexprs[] = $node->number;
+            }
+        }
+
+        if (is_a($node, 'qtype_preg_operator')) {
+            foreach ($node->operands as $operand) {
+                $this->detect_recursive_subexpr_calls($operand, $newsubexprs);
+            }
+        }
+    }
+
     protected function expand_quantifiers($node) {
         if (is_a($node, 'qtype_preg_operator')) {
             foreach ($node->operands as $key => $operand) {
@@ -185,7 +202,6 @@
             }
         }
         if ($node->type == qtype_preg_node::TYPE_NODE_FINITE_QUANT) {
-            $this->max_finite_quant_borders_difference = max($this->max_finite_quant_borders_difference, $node->rightborder - $node->leftborder);
             if ($node->leftborder == 0 && $node->rightborder == 0) {
                 // Convert x{0} to emptiness.
                 $node = new qtype_preg_leaf_meta(qtype_preg_leaf_meta::SUBTYPE_EMPTY);
@@ -261,8 +277,8 @@ start ::= expr(B). {
     // Assign identifiers.
     $this->assign_ids($this->root);
 
-    // Calculate nullable, firstpos, lastpos and followpos for all nodes.
-    $this->root->calculate_nflf($this->followpos);
+    // Calculate recursive subexpression calls.
+    $this->detect_recursive_subexpr_calls($this->root);
 }
 
 expr(A) ::= PARSELEAF(B). {

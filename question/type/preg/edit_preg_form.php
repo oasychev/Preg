@@ -139,24 +139,30 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
      * @return object $question the modified data.
      */
     protected function data_preprocessing_extra_answer_fields($question, $extrafields, $withanswerfiles = false) {
-        $key = 0;
-        // Setting $question->$field[$key] won't work, so we need set an array to $question->$field.
+        // Setting $question->$field[$key] won't work in PHP, so we need set an array of answer values to $question->$field.
+        // As we may have several extra fields with data for several answers in each, we use an array of arrays.
+        // Index in $extrafieldsdata is an extra answer field name, value - array of it's data for each answer.
         $extrafieldsdata = array();
-        foreach ($extrafields as $field) {
+        // First, prepare an array if empty arrays for each extra answer fields data.
+        foreach ($extraanswerfields as $field) {
             $extrafieldsdata[$field] = array();
         }
 
+        // Fill arrays with data from $question->options->answers.
+        $key = 0;
         foreach ($question->options->answers as $answer) {
-            foreach ($extrafields as $field) {
-                $this->data_preprocessing_extra_answer_field($extrafieldsdata, $answer, $field, $key);
+            foreach ($extraanswerfields as $field) {
+                // See hack comment in {@link data_preprocessing_answers()}.
+                unset($this->_form->_defaultValues["{$field}[{$key}]"]);
+                $extrafieldsdata[$field][$key] = $this->data_preprocessing_extra_answer_field($answer, $field);
             }
             $key++;
         }
 
-        foreach ($extrafields as $field) {
+        // Set this data in the $question object.
+        foreach ($extraanswerfields as $field) {
             $question->$field = $extrafieldsdata[$field];
         }
-
         return $question;
     }
 
@@ -166,10 +172,8 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
      * Questions with non-trivial DB - form element relationship will
      * want to override this.
      */
-    protected function data_preprocessing_extra_answer_field(&$extrafieldsdata, $answer, $field, $key) {
-        // See hack comment in data_preprocessing_answers.
-        unset($this->_form->_defaultValues["$field[$key]"]);
-        $extrafieldsdata[$field][$key] = $answer->$field;
+    protected function data_preprocessing_extra_answer_field($answer, $field) {
+        return $answer->$field;
     }
 
     protected function get_hint_fields($withclearwrong = false, $withshownumpartscorrect = false) {
@@ -215,8 +219,7 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
      * @param MoodleQuickForm $mform the form being built.
      */
     protected function definition_inner($mform) {
-        global $CFG;
-        global $PAGE;
+        global $CFG, $COURSE;
 
         question_bank::load_question_definition_classes($this->qtype());
         $qtypeclass = 'qtype_'.$this->qtype();
@@ -247,8 +250,20 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
         $mform->setDefault('lexemhintpenalty', '0.4');
         $mform->setType('lexemhintpenalty', PARAM_NUMBER);
         $mform->addHelpButton('lexemhintpenalty', 'lexemhintpenalty', 'qtype_preg');
-        $langs = block_formal_langs::available_langs();// TODO - add context.
-        $mform->addElement('select', 'langid', get_string('langselect', 'qtype_preg'), $langs);
+
+        // Fetch course context if it is possible.
+        $context = null;
+        if ($COURSE != null) {
+            if (is_a($COURSE, 'stdClass')) {
+                $context = context_course::instance($COURSE->id);
+            } else {
+                $context = $COURSE->get_context();
+            }
+        }
+
+        $currentlanguages = block_formal_langs::available_langs( $context );
+        //$langs = block_formal_langs::available_langs();// TODO - add context.
+        $mform->addElement('select', 'langid', get_string('langselect', 'qtype_preg'), $currentlanguages);
         $mform->setDefault('langid', $CFG->qtype_preg_defaultlang);
         $mform->addHelpButton('langid', 'langselect', 'qtype_preg');
         $mform->addElement('text', 'lexemusername', get_string('lexemusername', 'qtype_preg'), array('size' => 54));
@@ -330,7 +345,7 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
                 $matcher = $questionobj->get_matcher($data['engine'], $trimmedanswer, $data['exactmatch'],
                         $questionobj->get_modifiers($data['usecase']), (-1)*$i, $data['notation'], $hintused);
                 if ($matcher->errors_exist()) {// There were errors in the matching process.
-                    $regexerrors = $matcher->get_error_messages(true);// Show no more than max errors.
+                    $regexerrors = $matcher->get_error_messages();// Show no more than max errors.
                     $errors['answer['.$key.']'] = '';
                     foreach ($regexerrors as $regexerror) {
                         $errors['answer['.$key.']'] .= $regexerror.'<br />';
@@ -367,6 +382,18 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
                 if (!empty($feedback) && preg_match('/\{\$([1-9][0-9]*|\w+)\}/', $feedback) == 1) {
                     $errors['feedback['.$key.']'] = get_string('nosubexprcapturing', 'qtype_preg', $querymatcher->name());
                 }
+            }
+        }
+
+        // Check that interactive hint settings doesn't contradict overall hint settings.
+        $langobj = block_formal_langs::lang_object($data['langid']);
+        $interactivehints = $data['interactivehint'];
+        foreach($interactivehints as $key => $hint) {
+            if ($hint == 'hintnextchar' && $data['usecharhint'] != true) {
+                $errors['interactivehint['.$key.']'] = get_string('unallowedhint', 'qtype_preg', get_string('hintnextchar', 'qtype_preg'));
+            }
+            if ($hint == 'hintnextlexem' && $data['uselexemhint'] != true) {
+                $errors['interactivehint['.$key.']'] = get_string('unallowedhint', 'qtype_preg', get_string('hintnextlexem', 'qtype_preg', $langobj->lexem_name()));
             }
         }
 
