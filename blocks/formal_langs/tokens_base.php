@@ -22,7 +22,7 @@
  * @author     Oleg Sychev, Mamontov Dmitriy, Maria Birukova
  * @license    http://www.gnu.org/copyleft/gpl.html GNU Public License
  */
-require_once($CFG->dirroot.'/question/type/poasquestion/poasquestion_string.php');
+require_once($CFG->dirroot.'/question/type/poasquestion/classes/string.php');
 require_once($CFG->dirroot.'/question/type/poasquestion/stringstream/stringstream.php');
 require_once($CFG->dirroot.'/blocks/formal_langs/descriptions/descriptionrule.php');
 
@@ -321,7 +321,7 @@ class block_formal_langs_ast_node_base {
             $data = $child->value();
             if ($data != null) {
                 if (is_object($data)) {
-                    /** @var qtype_poasquestion_string $data */
+                    /** @var qtype_poasquestion\string $data */
                     $data = $data->string();
                 }
                 $values[] = $data;
@@ -461,7 +461,7 @@ class block_formal_langs_token_base extends block_formal_langs_ast_node_base {
         if ($this->use_editing_distance()) {// Damerau-Levenshtein distance is default now.
             $distance = block_formal_langs_token_base::damerau_levenshtein($this->value(), $token->value(), $options);
         } else {// Distance not applicable, so return a big number.
-            $distance = textlib::strlen($this->value()) + textlib::strlen($token->value());
+            $distance = core_text::strlen($this->value()) + core_text::strlen($token->value());
         }
         return $distance;
     }
@@ -681,7 +681,7 @@ class block_formal_langs_token_base extends block_formal_langs_ast_node_base {
             $value->tolower();
             $value = $value->string();
         } else {
-            $value = textlib::strtolower($value);
+            $value = core_text::strtolower($value);
         }
         return $value;
     }
@@ -1801,7 +1801,7 @@ class block_formal_langs_processed_string {
             $tokens = $this->tokenstream->tokens;
             /** @var block_formal_langs_node_position $pos */
             $pos = null;
-            /** @var null|qtype_poasquestion_string $value */
+            /** @var null|qtype_poasquestion\string $value */
             $value = null;
             if (array_key_exists($nodenumber, $tokens)) {
                 /** @var block_formal_langs_token_base $token */
@@ -1846,7 +1846,7 @@ class block_formal_langs_processed_string {
     public function node_descriptions_list() {
         global $DB;
         if ($this->descriptions == null) {
-            $istablefilledincorrect = !is_string($this->tablename) || textlib::strlen($this->tablename) == 0;
+            $istablefilledincorrect = !is_string($this->tablename) || core_text::strlen($this->tablename) == 0;
             if (!is_numeric($this->tableid)  || $istablefilledincorrect) {
                 throw new coding_exception('Trying to extract descriptions from unknown sources for string');
             }
