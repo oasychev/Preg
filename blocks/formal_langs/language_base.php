@@ -217,6 +217,18 @@ abstract class block_formal_langs_predefined_language extends block_formal_langs
      */
     public function __construct($id, $langdbrecord = NULL) {
         $this->id = $id;
+        $this->parser = null;
+    }
+    
+    /** Returns a pasrser for parsing data
+        @return mixed parser
+     */
+    public function parser()  {
+        if ($this->parser == null) {
+            $parsername = $this->parsername();
+            $this->parser =  new $parsername();
+        }
+        return $this->parser;
     }
     /** Preprocesses a string before scanning. This can be used for simplifying analyze
         and some other purposes, like merging some different variations of  same character
@@ -343,7 +355,7 @@ abstract class block_formal_langs_predefined_language extends block_formal_langs
             $this->scan($processedstring);
         }
         $parsername = $this->parsername();
-        $parser =  new $parsername();
+        $parser =  $this->parser();
         $parser->parse($processedstring, $iscorrect);
     }
     
