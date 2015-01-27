@@ -217,6 +217,18 @@ abstract class block_formal_langs_predefined_language extends block_formal_langs
      */
     public function __construct($id, $langdbrecord = NULL) {
         $this->id = $id;
+        $this->parser = null;
+    }
+    
+    /** Returns a pasrser for parsing data
+        @return mixed parser
+     */
+    public function parser()  {
+        if ($this->parser == null) {
+            $parsername = $this->parsername();
+            $this->parser =  new $parsername();
+        }
+        return $this->parser;
     }
     /** Preprocesses a string before scanning. This can be used for simplifying analyze
         and some other purposes, like merging some different variations of  same character
@@ -234,6 +246,52 @@ abstract class block_formal_langs_predefined_language extends block_formal_langs
      */
     protected function lexername() {
         return 'block_formal_langs_predefined_' . $this->name() . '_lexer_raw';
+    }
+    /**
+     * A function for safe fetching of next token
+     */
+    protected function next_token($stream) {
+        try {
+            return $this->scaner->next_token();
+        }  catch (Exception $e) {
+            // Avoid visibility problems via solution from http://php.net/manual/ru/function.get-object-vars.php#47075
+            $obj2array = function(&$Instance) {
+                $clone = (array) $Instance;
+                $rtn = array ();
+                $rtn['___SOURCE_KEYS_'] = $clone;
+
+                while ( list ($key, $value) = each ($clone) ) {
+                    $aux = explode ("\0", $key);
+                    $newkey = $aux[count($aux)-1];
+                    $rtn[$newkey] = &$rtn['___SOURCE_KEYS_'][$key];
+                }
+
+                return $rtn;
+            };
+            $pos = $obj2array($this->scaner);
+            
+            $res = new block_formal_langs_scanning_error();
+            $res->tokenindex = $pos['counter'];
+            $a = new stdClass();
+            $a->line = $pos['yyline'];
+            $a->position = $pos['yycol'];
+            $a->str = $pos['yychar'];
+            $yytext = function() use($pos) {
+                return $pos['yy_buffer']->substring($pos['yy_buffer_start'], $pos['yy_buffer_end'] - $pos['yy_buffer_start']
+                )->string();
+            };
+            $a->symbol = $yytext();
+            if (is_object($a->symbol)) {
+                $a->symbol = $symbol->string();
+            }
+            $errormessage = 'clanguageunknownsymbol';
+			if (function_exists('get_string')) {
+				$res->errormessage = get_string($errormessage,'block_formal_langs',$a);
+			}
+            $stream->errors[] = $res;  
+            return $this->next_token($stream);
+        }
+        return null;
     }
     /**
      * Fills token stream field of the processed string objects
@@ -260,16 +318,22 @@ abstract class block_formal_langs_predefined_language extends block_formal_langs
             $this->scaner = new $scanerclass($pseudofile);
             //Now, we are splitting text into lexemes
             $tokens = array();
-            while ($token = $this->scaner->next_token()) {
+            while ($token = $this->next_token($stream)) {
                 $tokens[] = $token;
             }
-
-            $stream->tokens = $tokens;
-            $stream->errors = $this->scaner->get_errors();
+            
+            $stream->tokens = $tokens;            
+            $scanererrors = $this->scaner->get_errors();
+            if (count($stream->errors)) {
+                if (count($scanererrors)) {
+                    $stream->errors = array_merge($stream->errors, $scanererrors);
+                }
+            } else {
+                $stream->errors = $scanererrors;
+            }
         }
 
         $processedstring->stream = $stream;
-
     }
 
     /**
@@ -291,7 +355,7 @@ abstract class block_formal_langs_predefined_language extends block_formal_langs
             $this->scan($processedstring);
         }
         $parsername = $this->parsername();
-        $parser =  new $parsername();
+        $parser =  $this->parser();
         $parser->parse($processedstring, $iscorrect);
     }
     
