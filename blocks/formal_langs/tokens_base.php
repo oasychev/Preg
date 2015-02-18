@@ -22,7 +22,7 @@
  * @author     Oleg Sychev, Mamontov Dmitriy, Maria Birukova
  * @license    http://www.gnu.org/copyleft/gpl.html GNU Public License
  */
-require_once($CFG->dirroot.'/question/type/poasquestion/poasquestion_string.php');
+require_once($CFG->dirroot.'/question/type/poasquestion/classes/string.php');
 require_once($CFG->dirroot.'/question/type/poasquestion/stringstream/stringstream.php');
 require_once($CFG->dirroot.'/blocks/formal_langs/descriptions/descriptionrule.php');
 
@@ -95,12 +95,12 @@ class block_formal_langs_node_position {
     protected $colstart;
     protected $colend;
     /** A starting position in string, as sequence of characters
-     *	@var int
-     */	
+     *  @var int
+     */
     protected $stringstart;
     /** An end position in string, as sequence of characters
-     *	@var int
-     */	    
+     *  @var int
+     */
     protected $stringend;
 
     public function linestart() {
@@ -110,15 +110,15 @@ class block_formal_langs_node_position {
     public function lineend(){
         return $this->lineend;
     }
-    
+
     public function colstart(){
         return $this->colstart;
     }
-    
+
     public function colend(){
         return $this->colend;
     }
-    
+
     public function stringstart() {
         return $this->stringstart;
     }
@@ -126,7 +126,7 @@ class block_formal_langs_node_position {
     public function stringend() {
         return $this->stringend;
     }
-    
+
     public function __construct($linestart, $lineend, $colstart, $colend, $stringstart = 0, $stringend = 0) {
         $this->linestart = $linestart;
         $this->lineend = $lineend;
@@ -214,7 +214,7 @@ class block_formal_langs_ast_node_base {
      * @var string
      */
     protected $description;
-	
+
     /**
      * A rule for generating node description
      * @var block_formal_langs_description_rule
@@ -309,8 +309,8 @@ class block_formal_langs_ast_node_base {
         }
         return false;
     }
-	
-	/**
+
+    /**
      * Returns value for node
      * @return string value for text of node
      */
@@ -321,7 +321,7 @@ class block_formal_langs_ast_node_base {
             $data = $child->value();
             if ($data != null) {
                 if (is_object($data)) {
-                    /** @var qtype_poasquestion_string $data */
+                    /** @var qtype_poasquestion\string $data */
                     $data = $data->string();
                 }
                 $values[] = $data;
@@ -330,19 +330,20 @@ class block_formal_langs_ast_node_base {
 
         return implode(' ', $values);
     }
-	
-	/**
+
+    /**
      * Returns list of tokens, covered by AST node. Tokens determined as not having any children
      * @return array list of tokens
      */
     public function tokens_list() {
         $childcount = count($this->childs());
+        $children = $this->childs();
         $result = array();
-        if (count($childcount) == 0) {
+        if (count($childcount) == 0 || $children === null || !is_array($children)) {
             $result[] = $this;
         } else {
             /** @var block_formal_langs_ast_node_base $child */
-            foreach($this->childs() as $child) {
+            foreach($children as $child) {
                 $tmp = $child->tokens_list();
                 if (count($result) == 0) {
                     $result = $tmp;
@@ -390,13 +391,13 @@ class block_formal_langs_token_base extends block_formal_langs_ast_node_base {
      */
     protected $tokenindex;
 
-	public function number() {
+    public function number() {
         if ($this->number === null) {
             $this->number = $this->tokenindex;
         }
         return $this->number;
     }
-	
+
     public function value() {
         return $this->value;
     }
@@ -460,7 +461,7 @@ class block_formal_langs_token_base extends block_formal_langs_ast_node_base {
         if ($this->use_editing_distance()) {// Damerau-Levenshtein distance is default now.
             $distance = block_formal_langs_token_base::damerau_levenshtein($this->value(), $token->value(), $options);
         } else {// Distance not applicable, so return a big number.
-            $distance = textlib::strlen($this->value()) + textlib::strlen($token->value());
+            $distance = core_text::strlen($this->value()) + core_text::strlen($token->value());
         }
         return $distance;
     }
@@ -677,14 +678,14 @@ class block_formal_langs_token_base extends block_formal_langs_ast_node_base {
                         $pair->editops=$this->redaction($this->value, $other[$k]->value);
                         ////////////////////////////////////////////////////////////////
                         $possiblepairs[] = $pair;
-/*
+                        /*
                         $result = $this->additional_generation($other[$k]);
                         if (count ($result)>0) {
                             for ($i=0; $i<count($result); $i++) {
                                 $possiblepairs[]=$result[$i];
                             }
                         }
-*/
+                        */
                     }
                     // possible pair (extra separator)
                     if ($k+1 != count($other)) {
@@ -728,7 +729,7 @@ class block_formal_langs_token_base extends block_formal_langs_ast_node_base {
             $value->tolower();
             $value = $value->string();
         } else {
-            $value = textlib::strtolower($value);
+            $value = core_text::strtolower($value);
         }
         return $value;
     }
@@ -1461,16 +1462,17 @@ class block_formal_langs_scanning_error extends block_formal_langs_lexical_error
  * language, lexer and parser objects stateless.
  */
 class block_formal_langs_processed_string {
-   
+
     /**
      * @var string table, where string belongs
      */
     protected $tablename;
+
     /**
      * @var integer an id to load/store user descriptions
      */
     protected $tableid;
-    
+
     /**
      * @var string a string to process
      */
@@ -1495,7 +1497,15 @@ class block_formal_langs_processed_string {
      * @var array strings of token descriptions
      */
     protected $descriptions=null;
-    
+
+    /**
+     * @var array lexical and syntax errors
+     * 
+     * Empty array means no errors was found, null - no error search done.
+     * Error must be ast_node_base children object with correct position.
+     */
+    protected $errors=null;
+
     /**
      * Sets a language for a string
      * @param block_formal_langs_abstract_language $lang  language
@@ -1503,13 +1513,13 @@ class block_formal_langs_processed_string {
     public function __construct($lang) {
         $this->language = $lang;
     }
-    
+
     /**
      * Called, when user assigns field to a class
      * @param string $name   name of field
      * @param mixed  $value  value of string
      */
-    public function __set($name, $value) {
+    public function __set($name, $value) { //TODO - is there any need to write set_errors funtion?
         $settertable = array('string' => 'set_string', 'stream' => 'set_stream', 'syntaxtree' => 'set_syntax_tree');
         $settertable['descriptions'] = 'set_descriptions';
         
@@ -1521,17 +1531,18 @@ class block_formal_langs_processed_string {
             $error  = 'Unknown property: ' . $name . ' in file: ' . $trace[0]['file'] . ', line: ' . $trace[0]['line'];
             trigger_error($error, E_USER_NOTICE);
         }
-        
     }
+
     /**
      * Called when need to determine, whether field exists
      * @param string $name   name of field
      * @return bool whether field exists
      */
     public function __isset($name) {
-        $getters = array('string', 'stream', 'syntaxtree', 'descriptions', 'language');
+        $getters = array('string', 'stream', 'syntaxtree', 'descriptions', 'language', 'errors');
         return in_array($name, $getters);
     }
+
     /**
      * Called when need to get field
      * @param string $name   name of field
@@ -1541,6 +1552,7 @@ class block_formal_langs_processed_string {
         $gettertable = array('string' => 'get_string', 'stream' => 'get_stream', 'syntaxtree' => 'get_syntax_tree');
         $gettertable['descriptions'] = 'node_descriptions_list';
         $gettertable['language'] = 'get_lang';
+        $gettertable['errors'] = 'get_errors';
         if (array_key_exists($name, $gettertable)) {
             $method = $gettertable[$name];
             return $this->$method();
@@ -1550,7 +1562,7 @@ class block_formal_langs_processed_string {
             trigger_error($error, E_USER_NOTICE);
         }
     }
-    
+   
     
     /** Removes a descriptions from a DB
      * @param string $tablename  name of source table
@@ -1568,7 +1580,7 @@ class block_formal_langs_processed_string {
         }
         return $DB->delete_records_select('block_formal_langs_node_dscr', implode(' AND ', $conditions));
     }
-    
+
     /** Returns a descriptions from a DB
      * @param string $tablename  name of source table
      * @param mixed $tableid     ids in table
@@ -1591,16 +1603,16 @@ class block_formal_langs_processed_string {
         }
         return $result;
     }
-    
+
     /**
      * Sets an inner string. Also flushes any other dependent fields (token stream, syntax tree, descriptions) 
      * @param string $string inner string
      */
     protected function set_string($string) {
         $this->string=$string;
-        $this->tokenstream=null;
-        $this->syntaxtree=null;
-        $this->descriptions=null;
+        $this->tokenstream = null;
+        $this->syntaxtree = null;
+        $this->descriptions = null;
     }
     /**
      * Sets a token stream. Must be used by lexical analyzer, to set a corrected stream for a string
@@ -1611,14 +1623,16 @@ class block_formal_langs_processed_string {
         $this->tokenstream = $stream;
         $this->syntaxtree=null;
     }
+
     /**
      * Sets a token stream. Must be used by lexer, to set a stream for scan
      * @param block_formal_langs_token_stream $stream stream of lexemes     
      */
     protected function set_stream($stream) {
         $this->tokenstream = $stream;
-        $this->syntaxtree=null;
+        $this->syntaxtree = null;
     }
+
     /**
      * Sets a syntax tree.
      * @param object $tree syntax tree 
@@ -1707,7 +1721,7 @@ class block_formal_langs_processed_string {
             
             $index = $index + 1;
         }
-        // If some old descriptions cellleft - delete it
+        
         // If some old descriptions left - delete it.
         if ($oldrecords != null) {
             $oldrecordids = array();
@@ -1718,7 +1732,7 @@ class block_formal_langs_processed_string {
             $DB->delete_records_select('block_formal_langs_node_dscr', " id IN ({$oldrecordin}) AND tablename = '{$this->tablename}' ");
         }
     }
-    
+
     /**
      * Set table parameters for string. Used by language.
      * @param string $tablename source table name
@@ -1728,7 +1742,7 @@ class block_formal_langs_processed_string {
         $this->tablename=$tablename;
         $this->tableid=$tableid;
     }
-    
+
     /**
      * Returns count of nodes which needs description or special name.
      *
@@ -1756,8 +1770,8 @@ class block_formal_langs_processed_string {
             return $this->tokenstream->tokens;
         }
     }
-	
-	/**
+
+    /**
      * Returns node by number
      * @param $nodenumber
      * @param array|block_formal_langs_ast_node_base $root a root node
@@ -1780,17 +1794,17 @@ class block_formal_langs_processed_string {
         }
         $children = $root->childs();
         $result = null;
-		if (count($children)) {
+        if (count($children)) {
             foreach($children as $child) {
                 if ($result == null) {
                     $result = $this->find_node($nodenumber, $child);
                 }
             }
-		}
+        }
         return $result;
     }
-	
-	/**
+
+    /**
      * Returns tree, converted to list and sorted by number
      * @param null|block_formal_langs_ast_node_base $root a root node
      * @return array array of nodes, sorted by number
@@ -1849,7 +1863,7 @@ class block_formal_langs_processed_string {
             $tokens = $this->tokenstream->tokens;
             /** @var block_formal_langs_node_position $pos */
             $pos = null;
-            /** @var null|qtype_poasquestion_string $value */
+            /** @var null|qtype_poasquestion\string $value */
             $value = null;
             if (array_key_exists($nodenumber, $tokens)) {
                 /** @var block_formal_langs_token_base $token */
@@ -1893,8 +1907,8 @@ class block_formal_langs_processed_string {
      */
     public function node_descriptions_list() {
         global $DB;
-        if ($this->descriptions == null) {
-            $istablefilledincorrect = !is_string($this->tablename) || textlib::strlen($this->tablename) == 0;
+        if ($this->descriptions === null) {
+            $istablefilledincorrect = !is_string($this->tablename) || core_text::strlen($this->tablename) == 0;
             if (!is_numeric($this->tableid)  || $istablefilledincorrect) {
                 throw new coding_exception('Trying to extract descriptions from unknown sources for string');
             }
@@ -1921,6 +1935,7 @@ class block_formal_langs_processed_string {
     public function set_descriptions_from_array($descriptions) {
         $this->descriptions = $descriptions;
     }
+
     /** Test, whether we have a lexeme descriptions for token with specified index
      * @param int $index index of token
      */
@@ -1931,6 +1946,7 @@ class block_formal_langs_processed_string {
         }
         return false;
     }
+
     /**
      * Returns a stream of tokens.
      * @return stream of tokens
@@ -1941,6 +1957,7 @@ class block_formal_langs_processed_string {
         }
         return $this->tokenstream;
     }
+
     /**
      * Returns a syntax tree
      * @return syntax tree
@@ -1952,6 +1969,16 @@ class block_formal_langs_processed_string {
         }
         return $this->syntaxtree;
     }
+
+    protected function get_errors() {
+        if ($this->errors === null) {
+            // No lexing and parsing was done, do now to look for errors.
+            $this->get_stream();
+            $this->get_syntax_tree();
+        }
+        return $this->errors;
+    }
+
     /**
      * Returns inner string
      * @return inner string
@@ -2058,6 +2085,12 @@ class block_formal_langs_string_pair {
         $correctstream = $correctstring->stream;
         $comparedstream = $comparedstring->stream;
         $bestgroups = $correctstream->look_for_token_pairs($comparedstream, $threshold, $options, true);
+        if(count($bestgroups) == 0) {
+            $stringpair = new $classname($correctstring, $comparedstring, array());
+            $arraystringpairs = array();
+            $arraystringpairs[] = $stringpair;
+            return $arraystringpairs;
+        }
         $arraystringpairs = array();
         for ($i = 0; $i < count($bestgroups); $i++) {
             $stringpair = new $classname($correctstring, $comparedstring, $bestgroups[$i]);
@@ -2074,12 +2107,12 @@ class block_formal_langs_string_pair {
         $correctstream = $correctstring->stream;
         $comparedstream = $comparedstring->stream;
         $bestgroups = $correctstream->look_for_token_pairs($comparedstream, $threshold, $options, false);
-	if(count($bestgroups)==0) {
-		$stringpair = new $classname($correctstring, $comparedstring, array());
-		$arraystringpairs = array();
-		$arraystringpairs[] = $stringpair;
-		return $arraystringpairs;
-	}
+        if(count($bestgroups) == 0) {
+            $stringpair = new $classname($correctstring, $comparedstring, array());
+            $arraystringpairs = array();
+            $arraystringpairs[] = $stringpair;
+            return $arraystringpairs;
+        }
         $arraystringpairs = array();
         for ($i = 0; $i < count($bestgroups); $i++) {
             $stringpair = new $classname($correctstring, $comparedstring, $bestgroups[$i]);
@@ -2143,26 +2176,33 @@ class block_formal_langs_string_pair {
         $correctstream = $this->correctstring->stream;   // correct lexems
         $streamcorrected = new block_formal_langs_token_stream();
         $streamcorrected->tokens = array();     // corrected lexems
+        $matchedpairs = array();
+        if (is_object($this->matches())) {
+            $matchedpairs = $this->matches()->matchedpairs;
+        }
         // TODO Birukova - change tokens using pairs
         for ($i = 0; $i < count($newstream->tokens); $i++) {
-            $flag = 0;
-            for ($j = 0; $j < count($this->matches); $j++) {
-                // not second
-                if (count($this->matches()->matchedpairs[$j]->comparedtokens) == 2) {
-                    if ($this->matches()->matchedpairs[$j]->comparedtokens[1] == $i) {
-                        $flag = 1;
+            $ispresentedinmatches = false;
+            for ($j = 0; $j < count($matchedpairs); $j++) {
+                /**
+                 * @var block_formal_langs_matched_tokens_pair $matchedpair
+                 */
+                $matchedpair = $matchedpairs[$j];
+                if (in_array($i, $matchedpair->comparedtokens)) {
+                    $ispresentedinmatches = true;
+                    if (count($matchedpair->comparedtokens) != 1) {
+                        // Note, that we must update $i if multiple tokens are merged into one
+                        // because next should walk into next compared token
+                        $i = max($matchedpair->comparedtokens);
                     }
-                }
-                // write correcttokens
-                if ($this->matches()->matchedpairs[$j]->comparedtokens[0]==$i) {
-                    for ($k = 0; $k<count($this->matches()->matchedpairs[$j]->correcttokens); $k++) {
-                        $streamcorrected->tokens[] = $correctstream->tokens[$this->matches()->matchedpairs[$j]->correcttokens[$k]];
+                    // Multiple tokens can be merged into one
+                    for($k = 0; $k < count($matchedpair->correcttokens); $k++) {
+                        $streamcorrected->tokens[] = $correctstream->tokens[$matchedpair->correcttokens[$k]];
                     }
-                    $flag = 1;
                 }
             }
-            // write comparedtoken
-            if ($flag == 0) {
+            // write compared token if no stuff is presented
+            if (!$ispresentedinmatches) {
                 $streamcorrected->tokens[] = $newstream->tokens[$i];
             }
         }
@@ -2176,16 +2216,18 @@ class block_formal_langs_string_pair {
     }
 
 
-    private function count_indexs_correct($nodenumber) {
+    private function count_indexes_correct($nodenumber) {
         $count = 0;
         return $count;
     }
     
-    private function count_indexs_incorrect($nodenumber) {
+    private function count_indexes_incorrect($nodenumber) {
+		$count = 0;
         return $count;
     }
     
-    private function index_pair_from_lexem($nodenumber) {
+    private function index_pair_from_lexeme($nodenumber) {
+		$index = 0;
         return $index;
     }
     /**
@@ -2198,11 +2240,11 @@ class block_formal_langs_string_pair {
      * @return string - description of node if present, quoted node value otherwise.
      */
     public function node_description($nodenumber, $quotevalue = true, $at = false) {
-        $correctindexs = $this->count_indexs_correct($nodenumber);
-        $comparedindexs = $this->count_indexs_incorrect($nodenumber);
+        $correctindexs = $this->count_indexes_incorrect($nodenumber);
+        $comparedindexs = $this->count_indexes_incorrect($nodenumber);
         // typo
         if (count($correctindexs)==1 && count($comparedindexs)==1) {
-            $index = $this->index_pair_from_lexem($nodenumber);
+            $index = $this->index_pair_from_lexeme($nodenumber);
             if($this->correctstring()->has_description($nodenumber)) {
                 return $this->correctstring()->node_description($nodenumber, false, true);
             } else {
@@ -2212,7 +2254,7 @@ class block_formal_langs_string_pair {
         }
         // extra separator
         if(count($correctindexs)==1 && count($comparedindexs)==2) {
-            $index = $this->index_pair_from_lexem($nodenumber);
+            $index = $this->index_pair_from_lexeme($nodenumber);
             if($this->correctstring()->has_description($nodenumber)) {
                 return $this->correctstring()->node_description($nodenumber, false, true);
             } else {
@@ -2223,7 +2265,7 @@ class block_formal_langs_string_pair {
             }
         }
         if(count($correctindexs)==2 && count($comparedindexs)==1) {
-            $index = $this->index_pair_from_lexem($nodenumber);
+            $index = $this->index_pair_from_lexeme($nodenumber);
             if($this->correctstring()->has_description($nodenumber) && !$this->correctstring()->has_description($nodenumber+1)) {
                 $value=$this->comparedstring()->stream->tokens[$index+1]->value();
                 return $this->correctstring()->node_description($nodenumber, false, true).' and '.get_string('quote', 'block_formal_langs', $value);
