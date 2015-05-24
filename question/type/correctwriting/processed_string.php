@@ -17,7 +17,7 @@
 
 require_once($CFG->dirroot.'/blocks/formal_langs/tokens_base.php');
 
-class qtype_correctwriting_proccesedstring extends block_formal_langs_processed_string {
+class qtype_correctwriting_proccesed_string extends block_formal_langs_processed_string {
 
     // Enumerations description in correct answer.
     protected $enums_description = null;
@@ -27,8 +27,7 @@ class qtype_correctwriting_proccesedstring extends block_formal_langs_processed_
         if ($isset) {
             return parent::__set($name, $value);
         }
-        $settertable = array('string' => 'set_string', 'stream' => 'set_stream', 'syntaxtree' => 'set_syntax_tree');
-        $settertable['descriptions'] = 'set_descriptions';
+        $settertable = array();
         $settertable['enumerations'] = 'set_enums_descriptions';
 
         if (array_key_exists($name, $settertable)) {
@@ -46,9 +45,9 @@ class qtype_correctwriting_proccesedstring extends block_formal_langs_processed_
         if ($isset) {
             return parent::__get($name);
         }
-        $gettertable = array('string' => 'get_string', 'stream' => 'get_stream', 'syntaxtree' => 'get_syntax_tree');
-        $gettertable['descriptions'] = 'node_descriptions_list';
+        $gettertable = array();
         $gettertable['enumerations'] = 'node_enums_descriptions';
+
         if (array_key_exists($name, $gettertable)) {
             $method = $gettertable[$name];
             return $this->$method();
@@ -64,7 +63,7 @@ class qtype_correctwriting_proccesedstring extends block_formal_langs_processed_
         if ($result) {
             return $result;
         }   
-        $getters = array('string', 'stream', 'syntaxtree', 'descriptions', 'enumeration');
+        $getters = array('enumerations');
         return in_array($name, $getters);
     }
 
@@ -78,15 +77,6 @@ class qtype_correctwriting_proccesedstring extends block_formal_langs_processed_
         return $this->enums_description;
     }
 
-    /**
-     *  Returns a stream of tokens.
-     *  @return stream of tokens
-     */
-    private function get_stream() {
-        if ($this->tokenstream == null)
-            $this->language->scan($this);
-        return $this->tokenstream;
-    }
     public function __clone() {	
         $this->tokenstream = clone $this->tokenstream;
         if($this->enums_description!=null) {

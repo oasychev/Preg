@@ -19,6 +19,7 @@ defined('MOODLE_INTERNAL') || die();
 //Other necessary requires
 require_once($CFG->dirroot.'/question/type/correctwriting/abstract_analyzer.php');
 require_once($CFG->dirroot.'/question/type/correctwriting/sequence_analyzer.php');
+require_once($CFG->dirroot.'/question/type/correctwriting/enum_catcher.php');
 
 class  qtype_correctwriting_enum_analyzer extends qtype_correctwriting_abstract_analyzer {
 
@@ -568,11 +569,6 @@ class  qtype_correctwriting_enum_analyzer extends qtype_correctwriting_abstract_
                 array_pop($enumschangecorrectstring);
             }
         }
-        // Change table indexes for tokens in correct answer.
-        foreach ($tokens as $token) {
-            $indexesintable[] = $token->token_index();
-        }
-        $stringpair->set_indexes_in_table($indexesintable);
         // Change correctstring.
         $stringpair->correctstring()->stream->tokens = $tokens;
         foreach ($enumschangecorrectstring as $i) {
@@ -603,6 +599,8 @@ class  qtype_correctwriting_enum_analyzer extends qtype_correctwriting_abstract_
                 $tempstringbegin = $tempstringbegin.' ';
             }
             $tempstringbegin = $tempstringbegin.$tempstringend;
+
+
             // Update correct string.
             $enumstring = clone($stringpair->correctstring());
             $enumstring->string = new qtype_poasquestion_string($tempstringbegin);
@@ -644,6 +642,15 @@ class  qtype_correctwriting_enum_analyzer extends qtype_correctwriting_abstract_
         $options->usecase = true;
         $count = 0; // Count of LCS tokens for current pair.
         // Get enumerations change order and include enumeration arrays.
+        $syntax_tree = $this->basestringpair->correctstring()->syntaxtree;
+        $enum_catcher = new qtype_correctwriting_enum_catcher($syntax_tree);
+        $enumdescription = $enum_catcher->getEnums();
+        for($i = 0; $i < count($enumdescription); $i++) {
+            for($j = 0; $j < count($enumdescription[$i]); $j++) {
+                $enumdescription[$i][$j] = new enum_element($enumdescription[$i][$j][0],$enumdescription[$i][$j][1]);
+            }
+        }
+        $this->basestringpair->correctstring()->enumerations = $enumdescription;
         $forstd = $this->get_enum_change_order($enumdescription);
         $enumchangeorder = $forstd->order;
         $includedenums = $forstd->includedenums;
@@ -658,7 +665,7 @@ class  qtype_correctwriting_enum_analyzer extends qtype_correctwriting_abstract_
 			$currentstringpair = clone $this->basestringpair;
 			$this->change_enum_order($currentstringpair, $enumchangeorder, $includedenums, $currentorder);
             // Find LCS of correct and corrected answers.
-            $currentcorrectstream = $currentstringpair->correctstring()->stream;
+            $currentcorrectstream = $currentstringpair->enum_correct_string()->stream;
             $lcsarray = qtype_correctwriting_sequence_analyzer::lcs($currentcorrectstream, $correctedstream, $options);
             // If lcs exist keep it's length...
             // Else length is zero.
