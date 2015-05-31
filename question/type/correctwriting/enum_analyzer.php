@@ -236,6 +236,12 @@ class  qtype_correctwriting_enum_analyzer extends qtype_correctwriting_abstract_
             }
         }
         // Create orders array based on array of elements numbers which are ordered like in corrected student answer.
+        for($i = 0; $i < count($elementsincorrectedanswer) - 1; $i++) {
+            if($elementsincorrectedanswer[$i] === $elementsincorrectedanswer[$i+1]) {
+                array_splice($elementsincorrectedanswer,$i,1);
+                $i--;
+            }
+        }
         do {
             $numberofelementtoskip = 0;
             do {
@@ -569,6 +575,12 @@ class  qtype_correctwriting_enum_analyzer extends qtype_correctwriting_abstract_
                 array_pop($enumschangecorrectstring);
             }
         }
+        // Change table indexes for tokens in correct answer.       
+        $indexesintable = array();
+        foreach ($tokens as $token) {       
+            $indexesintable[] = $token->token_index();      
+        }       
+        $stringpair->set_enum_correct_to_correct($indexesintable);
         // Change correctstring.
         $stringpair->correctstring()->stream->tokens = $tokens;
         foreach ($enumschangecorrectstring as $i) {
