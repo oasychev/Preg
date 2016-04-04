@@ -1,5 +1,5 @@
 <?php
-// This file is part of Preg question type - https://code.google.com/p/oasychev-moodle-plugins/
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
 //
 // Preg question type is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -8506,7 +8506,7 @@ class qtype_preg_unicode extends core_text {
     }
 
     /**
-     * @param $charset object of qtype_poasquestion\string.
+     * @param $charset object of qtype_poasquestion\utf8_string.
      * @return a sorted array of trivial ranges corresponding to the given charset.
      */
     public static function get_ranges_from_charset($charset, $caseless = false) {

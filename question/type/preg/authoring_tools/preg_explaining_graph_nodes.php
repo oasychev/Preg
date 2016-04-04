@@ -1,5 +1,5 @@
 <?php
-// This file is part of Preg question type - https://code.google.com/p/oasychev-moodle-plugins/
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
 //
 // Preg question type is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -610,8 +610,8 @@ class qtype_preg_explaining_graph_node_subexpr extends qtype_preg_explaining_gra
         $label = '';
         if ($this->pregnode->number != null) {
             $label = get_string($this->pregnode->lang_key(true), 'qtype_preg', $this->pregnode);
-            $label = qtype_poasquestion\string::replace(': [ {$a->firstoperand} ]', '', $label);
-            $label = qtype_poasquestion\string::replace('"', '\\"', $label);
+            $label = qtype_poasquestion\utf8_string::replace(': [ {$a->firstoperand} ]', '', $label);
+            $label = qtype_poasquestion\utf8_string::replace('"', '\\"', $label);
         }
 
         $generated = $this->handler->is_node_generated($this->pregnode);

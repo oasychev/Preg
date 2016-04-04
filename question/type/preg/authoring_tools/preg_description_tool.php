@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http:// moodle.org/
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http:// www.gnu.org/licenses/>.
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
  * Defines handler for regex description tool
@@ -213,7 +213,7 @@ class qtype_preg_description_tool extends qtype_preg_authoring_tool {
             $string = preg_replace('%;((?:</span>)?)]%u', '\1]', $string);   // Postprocessing
         }
         if (!empty($wholepattern)) {
-            $string = qtype_poasquestion\string::replace('%content', $string, $wholepattern);
+            $string = qtype_poasquestion\utf8_string::replace('%content', $string, $wholepattern);
         }
         $this->options = $backupoptions; // restore original options
         return $string;

@@ -1,5 +1,5 @@
 <?php
-// This file is part of Preg question type - https://code.google.com/p/oasychev-moodle-plugins/
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
 //
 // Preg question type is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -1108,7 +1108,8 @@ class qtype_preg_fa_node_assert extends qtype_preg_fa_operator {
             return get_string($this->pregnode->subtype, 'qtype_preg');
         }
         if (!$options->mergeassertions) {
-            throw new qtype_preg_mergedassertion_option_exception('');
+            $assertname = get_string($this->pregnode->subtype, 'qtype_preg');
+            return get_string('mergemodeforassertion', 'qtype_preg', $assertname);
         }
         return true;*/
     }

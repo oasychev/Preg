@@ -1,5 +1,5 @@
 <?php
-// This file is part of Poasquestion question type - https://code.google.com/p/oasychev-moodle-plugins/
+// This file is part of Poasquestion question type - https://bitbucket.org/oasychev/moodle-plugins/overview
 //
 // Poasquestion question type is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,12 +23,10 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace qtype_poasquestion;
 defined('MOODLE_INTERNAL') || die();
 
-/**
- * @deprecated since 2.8
- */
-class qtype_poasquestion_string extends core_text implements ArrayAccess {
+class utf8_string extends \core_text implements \ArrayAccess {
     /** @var string the utf-8 string itself. */
     private $fstring;
     /**@var int length of the string, calculated when the string is modified. */
@@ -114,10 +112,10 @@ class qtype_poasquestion_string extends core_text implements ArrayAccess {
      * Returns a substring of this string.
      * @param int start starting index of the substring.
      * @param int length length of the substring.
-     * @return object an instance of qtype_poasquestion_string.
+     * @return object an instance of qtype_poasquestion\utf8_string.
      */
     public function substring($start, $length = null) {
-        return new qtype_poasquestion_string(self::substr($this->fstring, $start, $length));
+        return new utf8_string(self::substr($this->fstring, $start, $length));
     }
 
     /**
@@ -147,10 +145,10 @@ class qtype_poasquestion_string extends core_text implements ArrayAccess {
 
     /**
      * Concatenates a string to this string.
-     * @param mixed a string to concatenate (can be either an instance of qtype_poasquestion_string or a simple native string).
+     * @param mixed a string to concatenate (either an instance of qtype_poasquestion\utf8_string or a simple native string).
      */
     public function concatenate($str) {
-        if (is_a($str, 'qtype_poasquestion_string')) {
+        if (is_a($str, 'qtype_poasquestion\utf8_string')) {
             $this->fstring .= $str->fstring;
             $this->flength += $str->flength;
         } else {

@@ -1,4 +1,18 @@
 <?php
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
  * Language strings for the Preg question type.
@@ -48,6 +62,7 @@ $string['lexemusername'] = 'Синоним слова "лексема", отоб
 $string['lexemusername_help'] = 'Возможно, студенты не знают, что атомарная часть языка называется <b>лексемой</b>. Они могут называть ее "словом", "цифрой" или чем-то другим. Вы можете задать слово, которое студенты будут видеть на кнопке подсказки лексемы.';
 $string['maxerrorsshowndescription'] = 'Максимальное число показываемых ошибок для каждого регулярного выражения в форме редактирования';
 $string['maxerrorsshownlabel'] = 'Максимальное число показываемых ошибок';
+$string['mergemodeforassertion'] = 'Пожалуйста, выберите режим полной поддержки утверждений в настройках типа вопроса. В быстром режиме {$a}';
 $string['nocorrectanswermatch'] = 'Не указано ни одного 100%-правильного ответа';
 $string['nohintgradeborderpass'] = 'Не указано ни одного с оценкой выше границы подсказок. Это отключает подсказки.';
 $string['notation'] = 'Нотация регулярных выражений';

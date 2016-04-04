@@ -1,4 +1,18 @@
 <?php
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
  * Language strings for the Preg question type.
@@ -48,6 +62,7 @@ $string['lexemusername'] = 'Student-visible name for lexem';
 $string['lexemusername_help'] = 'Your students probably won\'t know that an atomic part of the language they learn is called <b>lexem</b>. They may prefer to call it "word" or "number" or something. You may define a name for lexem that would be shown on the "Hint next lexem" button there.';
 $string['maxerrorsshowndescription'] = 'Maximum number of errors shown for each regular expression in the question editing form';
 $string['maxerrorsshownlabel'] = 'Maximum number of errors shown';
+$string['mergemodeforassertion'] = 'Please select full assertion support in the settings. In fast mode {$a}';
 $string['nocorrectanswermatch'] = 'No maximum grade regular expression matches the correct answer';
 $string['nohintgradeborderpass'] = 'No answer has a grade greater or equal the hint grade border. This disables hinting.';
 $string['notation'] = 'Regular expression notation';
