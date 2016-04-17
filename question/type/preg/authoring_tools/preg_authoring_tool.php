@@ -1,4 +1,19 @@
 <?php
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
 /**
  * Defines abstract class which is common for all authoring tools.
  *
@@ -92,7 +107,7 @@ abstract class qtype_preg_authoring_tool extends qtype_preg_regex_handler implem
      */
     public static function string_to_html($string) {
         $result = '';
-        $string = new qtype_poasquestion\string($string);
+        $string = new qtype_poasquestion\utf8_string($string);
         for ($i = 0; $i < $string->length(); ++$i) {
             $result .= self::char_to_html($string[$i]);
         }
@@ -101,7 +116,7 @@ abstract class qtype_preg_authoring_tool extends qtype_preg_regex_handler implem
 
     public static function escape_characters($string, $chars) {
         $result = '';
-        $string = new qtype_poasquestion\string($string);
+        $string = new qtype_poasquestion\utf8_string($string);
         for ($i = 0; $i < $string->length(); ++$i) {
             $char = $string[$i];
             $result .= in_array($char, $chars) ? "\\$char" : $char;
@@ -111,7 +126,7 @@ abstract class qtype_preg_authoring_tool extends qtype_preg_regex_handler implem
 
     public static function replace_special_characters($string) {
         $result = '';
-        $string = new qtype_poasquestion\string($string);
+        $string = new qtype_poasquestion\utf8_string($string);
         for ($i = 0; $i < $string->length(); ++$i) {
             $char = $string[$i];
             $code = core_text::utf8ord($char);
@@ -126,7 +141,7 @@ abstract class qtype_preg_authoring_tool extends qtype_preg_regex_handler implem
     }
 
     public static function userinscription_to_string($ui, $explaincodes = true) {
-        $data = new qtype_poasquestion\string($ui->data);
+        $data = new qtype_poasquestion\utf8_string($ui->data);
 
         // Is it a range?
         if ($ui->is_character_range()) {

@@ -353,8 +353,10 @@ class qtype_writeregex_edit_form extends qtype_shortanswer_edit_form {
                 $trimmedanswer = trim($answer);
                 if ($trimmedanswer !== '') {
 					$pregquestionobj = new qtype_preg_question();
-                    $matcher = $pregquestionobj->get_matcher($data['engine'], $trimmedanswer, false,
-                        $pregquestionobj->get_modifiers($data['usecase']), (-1) * $i, $data['notation']);
+                    $matchingoptions = $pregquestionobj->get_matching_options(false, $pregquestionobj->get_modifiers($data['usecase']), null, $data['notation']);
+                    $matchingoptions->extensionneeded = false;
+                    $matchingoptions->capturesubexpressions = true;
+                    $matcher = $pregquestionobj->get_matcher($data['engine'], $trimmedanswer, $matchingoptions);
 
                     if ($matcher->errors_exist()) {
                         $regexerrors = $matcher->get_error_messages($CFG->qtype_writregex_maxerrorsshown);

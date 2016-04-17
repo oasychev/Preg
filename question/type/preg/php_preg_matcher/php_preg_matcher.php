@@ -1,5 +1,5 @@
 <?php
-// This file is part of Preg question type - https://code.google.com/p/oasychev-moodle-plugins/
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
 //
 // Preg question type is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -88,7 +88,7 @@ class qtype_preg_php_preg_matcher extends qtype_preg_matcher {
             $regex = implode('\/', explode('/', $regex));
         }
         if (!$this->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_EXTENDED)) { // Avoid newlines in non-extended mode.
-            $regex = qtype_poasquestion\string::replace("\n", '', $regex);
+            $regex = qtype_poasquestion\utf8_string::replace("\n", '', $regex);
         }
         $regex = '/' . $regex . '/u';
 
@@ -124,7 +124,7 @@ class qtype_preg_php_preg_matcher extends qtype_preg_matcher {
             $regex = '^(?:' . $regex . "\n)$";
         }
         if (!$this->options->is_modifier_set(qtype_preg_handling_options::MODIFIER_EXTENDED)) { // Avoid newlines in non-extended mode.
-            $regex = qtype_poasquestion\string::replace("\n", '', $regex);
+            $regex = qtype_poasquestion\utf8_string::replace("\n", '', $regex);
         }
         $regex = '/' . $regex . '/u';
         $regex .= $this->options->modifiers_to_string();

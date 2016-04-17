@@ -1,5 +1,5 @@
 <?php
-// This file is part of Preg question type - https://code.google.com/p/oasychev-moodle-plugins/
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
 //
 // Preg question type is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -2289,7 +2289,7 @@ class fa {
         $intersection = null;
         $transitionadded = false;
         $flag = new \qtype_preg_charset_flag();
-        $flag->set_data(\qtype_preg_charset_flag::TYPE_SET, new \qtype_poasquestion\string("\n"));
+        $flag->set_data(\qtype_preg_charset_flag::TYPE_SET, new \qtype_poasquestion\utf8_string("\n"));
         $charset = new \qtype_preg_leaf_charset();
         $charset->flags = array(array($flag));
         $charset->userinscription = array(new \qtype_preg_userinscription("\n"));

@@ -1,4 +1,19 @@
 <?php
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
 /**
  * Defines syntax tree tool's nodes.
  *
@@ -503,7 +518,7 @@ class qtype_preg_syntax_tree_node_subexpr extends qtype_preg_syntax_tree_operato
 
     public function tooltip() {
         $result = get_string($this->pregnode->lang_key(true), 'qtype_preg', $this->pregnode);
-        $result = qtype_poasquestion\string::replace(': [ {$a->firstoperand} ]', '', $result);
+        $result = qtype_poasquestion\utf8_string::replace(': [ {$a->firstoperand} ]', '', $result);
         return $result;
     }
 }

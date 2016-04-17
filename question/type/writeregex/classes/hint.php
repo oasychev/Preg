@@ -87,7 +87,7 @@ abstract class hint extends \qtype_poasquestion\hint {
         // Description for hint using mode (e.g. '(for correct answer)').
         $additionformode = get_string('hinttitleaddition', 'qtype_writeregex',
             get_string('hinttitleadditionformode_' . $this->mode, 'qtype_writeregex'));
-        return \qtype_poasquestion\string::strtolower($this->hint_title()) . ' ' . $additionformode;
+        return \qtype_poasquestion\utf8_string::strtolower($this->hint_title()) . ' ' . $additionformode;
     }
 
     /**

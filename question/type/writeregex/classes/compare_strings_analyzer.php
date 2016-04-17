@@ -41,12 +41,13 @@ class compare_strings_analyzer extends analyzer {
         $totalfraction = 0;
 
         $pregquestionstd = new \qtype_preg_question();
-        $studentmatcher = $pregquestionstd->get_matcher($this->question->engine, $answer, false,
-            $pregquestionstd->get_modifiers($this->question->usecase), 0, $this->question->notation);
+        $matchingoptions = $pregquestionstd->get_matching_options(false, $pregquestionstd->get_modifiers($this->question->usecase), null, $this->question->notation);
+        $matchingoptions->extensionneeded = false;
+        $matchingoptions->capturesubexpressions = true;
 
-        $pregquestiont = new \qtype_preg_question();
-        $teachermatcher = $pregquestiont->get_matcher($this->question->engine, $response, false,
-            $pregquestiont->get_modifiers($this->question->usecase), 0, $this->question->notation);
+        $studentmatcher = $pregquestionstd->get_matcher($this->question->engine, $answer, $matchingoptions);
+
+        $teachermatcher = $pregquestionstd->get_matcher($this->question->engine, $response, $matchingoptions);
 
         foreach ($this->question->teststrings as $string) {
 

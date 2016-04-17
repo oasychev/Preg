@@ -1,4 +1,19 @@
 <?php
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
 /**
  * Defines class for regex testing tool.
  *
@@ -55,18 +70,12 @@ class qtype_preg_regex_testing_tool implements qtype_preg_i_authoring_tool {
         $regular->get_query_matcher($engine);
 
         // Create matcher to use for testing regexes.
-        // Do not use qtype_preg_question::get_matcher to pass selection to the options.
         $this->question = $regular;
-        $matchingoptions = new qtype_preg_matching_options();
-        $matchingoptions->modifiers = $regular->get_modifiers($usecase);
+        $matchingoptions = $regular->get_matching_options($exactmatch, $regular->get_modifiers($usecase), null, $notation);
         $matchingoptions->extensionneeded = false; // No need to generate next characters there.
         $matchingoptions->capturesubexpressions = true;
-        $matchingoptions->notation = $notation;
-        $matchingoptions->exactmatch = $exactmatch;
         $matchingoptions->selection = $selection;
-        $matchingoptions->mergeassertions = $CFG->qtype_preg_assertfailmode;
-        $engineclass = 'qtype_preg_' . $engine;
-        $matcher = new $engineclass($regex, $matchingoptions);
+        $matcher = $regular->get_matcher($engine, $regex, $matchingoptions, null, false);
         $this->matcher = $matcher;
         if ($matcher->errors_exist()) {
             $this->errormsgs = $matcher->get_error_messages();

@@ -41,14 +41,15 @@ class compare_automata_analyzer extends analyzer {
      */
     public function analyze ($answer, $response)
     {
-        $answerquestionstd = new \qtype_preg_question();
-        $answermatcher = $answerquestionstd->get_matcher($this->question->engine, $answer, false,
-            $answerquestionstd->get_modifiers($this->question->usecase), 0, $this->question->notation);
+        $pregquestionstd = new \qtype_preg_question();
+        $matchingoptions = $pregquestionstd->get_matching_options(false, $pregquestionstd->get_modifiers($this->question->usecase), null, $this->question->notation);
+        $matchingoptions->extensionneeded = false;
+        $matchingoptions->capturesubexpressions = true;
+
+        $answermatcher = $pregquestionstd->get_matcher($this->question->engine, $answer, $matchingoptions);
         $answerautomaton = $answermatcher->automaton;
 
-        $responsequestionstd = new \qtype_preg_question();
-        $responsematcher = $responsequestionstd->get_matcher($this->question->engine, $response, false,
-            $responsequestionstd->get_modifiers($this->question->usecase), 0, $this->question->notation);
+        $responsematcher = $pregquestionstd->get_matcher($this->question->engine, $response, $matchingoptions);
         $responseautomaton = $responsematcher->automaton;
 
         $differences = array();

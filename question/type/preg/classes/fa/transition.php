@@ -1,5 +1,5 @@
 <?php
-// This file is part of Preg question type - https://code.google.com/p/oasychev-moodle-plugins/
+// This file is part of Preg question type - https://bitbucket.org/oasychev/moodle-plugins/overview
 //
 // Preg question type is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -331,15 +331,15 @@ class transition {
             // There are end string assertions.
             if (\qtype_preg_unicode::is_in_range("\n", $ranges)) {
                 return $capz['before']
-                    ? array(\qtype_preg_leaf::NEXT_CHAR_END_HERE, new \qtype_poasquestion\string("\n"))
-                    : array(\qtype_preg_leaf::NEXT_CHAR_OK, new \qtype_poasquestion\string("\n"));
+                    ? array(\qtype_preg_leaf::NEXT_CHAR_END_HERE, new \qtype_poasquestion\utf8_string("\n"))
+                    : array(\qtype_preg_leaf::NEXT_CHAR_OK, new \qtype_poasquestion\utf8_string("\n"));
             } else {
                 return array(\qtype_preg_leaf::NEXT_CHAR_CANNOT_GENERATE, null);
             }
         } else if ($circumflex['after']) {
             // There are start string assertions.
             if (\qtype_preg_unicode::is_in_range("\n", $ranges)) {
-                return array(\qtype_preg_leaf::NEXT_CHAR_OK, new \qtype_poasquestion\string("\n"));
+                return array(\qtype_preg_leaf::NEXT_CHAR_OK, new \qtype_poasquestion\utf8_string("\n"));
             } else {
                 return array(\qtype_preg_leaf::NEXT_CHAR_CANNOT_GENERATE, null);
             }
@@ -368,7 +368,7 @@ class transition {
             }
         }
 
-        return array(\qtype_preg_leaf::NEXT_CHAR_OK, new \qtype_poasquestion\string(\core_text::code2utf8($result_ranges[0][0])));
+        return array(\qtype_preg_leaf::NEXT_CHAR_OK, new \qtype_poasquestion\utf8_string(core_text::code2utf8($result_ranges[0][0])));
     }
 
     public function is_start_anchor() {
@@ -634,7 +634,7 @@ class transition {
         $otherhastags = $other->has_tags();
         $resulttran = null;
         $flag = new \qtype_preg_charset_flag();
-        $flag->set_data(\qtype_preg_charset_flag::TYPE_SET, new \qtype_poasquestion\string("\n"));
+        $flag->set_data(\qtype_preg_charset_flag::TYPE_SET, new \qtype_poasquestion\utf8_string("\n"));
         $charset = new \qtype_preg_leaf_charset();
         $charset->flags = array(array($flag));
         $charset->userinscription = array(new \qtype_preg_userinscription("\n"));
