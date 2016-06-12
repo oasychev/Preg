@@ -14,8 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace qtype_writeregex;
+
 /**
- * Write regex question type version information.
+ * Class analyser fot compare regex.
  *
  * @package qtype
  * @subpackage writeregex
@@ -23,21 +25,24 @@
  * @author Mikhail Navrotskiy <m.navrotskiy@gmail.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+class compare_tree_analyzer extends analyzer {
 
-defined('MOODLE_INTERNAL') || die();
+    /**
+     * Get equality for user response.
+     * @param $answer string Regex answer.
+     * @param $response string User response.
+     * @return compare_tree_analyzer_result Result of compare.
+     */
+    public function analyze ($answer, $respose) {
+        return new compare_tree_analyzer_result();
+    }
 
-$plugin->component = 'qtype_writeregex';
-$plugin->version   = 2016060802;
-
-$plugin->requires  = 2013050100;
-
-$plugin->maturity  = MATURITY_STABLE;
-
-$plugin->dependencies = array(
-    'qtype_shortanswer' => 2013050100,
-    'qtype_preg' => 2013011800,
-    'qtype_poasquestion' => 2013011800,
-    'qbehaviour_adaptivehints' => 2013052500,
-    'qbehaviour_adaptivehintsnopenalties' => 2013052500,
-    'qbehaviour_interactivehints' => 2013060200
-);
+    /**
+     * Get analyzer name
+     * @return analyzer name, understandable for user
+     */
+    public function name()
+    {
+        return '';
+    }
+}

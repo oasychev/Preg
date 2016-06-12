@@ -14,8 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace qtype_writeregex;
+
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/question/type/preg/authoring_tools/preg_explaining_graph_tool.php');
+
 /**
- * Write regex question type version information.
+ * Class for writeregex explanation graph hint.
  *
  * @package qtype
  * @subpackage writeregex
@@ -23,21 +30,27 @@
  * @author Mikhail Navrotskiy <m.navrotskiy@gmail.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+class explanation_graph_hint extends hint {
 
-defined('MOODLE_INTERNAL') || die();
+    /**
+     * Get hint title.
+     * @return string Hint title.
+     */
+    public function hint_title() {
+        return get_string('explgraphhinttype', 'qtype_writeregex');
+    }
 
-$plugin->component = 'qtype_writeregex';
-$plugin->version   = 2016060802;
+    /**
+     * @return string key for lang strings and field names
+     */
+    public function short_key() {
+        return 'explgraph';
+    }
 
-$plugin->requires  = 2013050100;
-
-$plugin->maturity  = MATURITY_STABLE;
-
-$plugin->dependencies = array(
-    'qtype_shortanswer' => 2013050100,
-    'qtype_preg' => 2013011800,
-    'qtype_poasquestion' => 2013011800,
-    'qbehaviour_adaptivehints' => 2013052500,
-    'qbehaviour_adaptivehintsnopenalties' => 2013052500,
-    'qbehaviour_interactivehints' => 2013060200
-);
+    /**
+     * @return qtype_preg_authoring_tool tool used for hint
+     */
+    public function tool($regex) {
+        return new \qtype_preg_explaining_graph_tool($regex, $this->get_regex_options());
+    }
+}
