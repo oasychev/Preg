@@ -282,8 +282,12 @@ class qtype_preg_fa_exec_state implements qtype_preg_matcher_state {
     // States to backtrack to when generating extensions of partial matches.
     public $backtrack_states;
 
+    // Object of qtype_preg_typo_container, containing all encountered errors.
+    public $errors;
+
     public function __clone() {
         $this->str = clone $this->str;  // Needs to be cloned for correct string generation.
+        $this->errors = clone $this->errors;
         foreach ($this->stack as $key => $item) {
             $this->stack[$key] = clone $item;
         }
@@ -552,7 +556,7 @@ class qtype_preg_fa_exec_state implements qtype_preg_matcher_state {
                 $length[-2] = $this->length_minus_nonconsuming() - $cur[0];
             }
         }
-        $result = new qtype_preg_matching_results($this->is_full(), $index, $length, $this->left, $this->extendedmatch);
+        $result = new qtype_preg_matching_results($this->is_full(), $index, $length, $this->left, $this->extendedmatch, $this->errors);
         $result->set_source_info($this->str, $this->matcher->get_max_subexpr(), $this->matcher->get_subexpr_name_to_number_map());
         return $result;
     }
@@ -585,6 +589,17 @@ class qtype_preg_fa_exec_state implements qtype_preg_matcher_state {
         } else if (!$this->is_full() && $other->is_full()) {
             //echo "wins 2\n";
             return false;
+        }
+
+        // Check for min errors.
+        $thiserrcount = $this->errors->count();
+        $othererrcount = $other->errors->count();
+        if ($matchinginprogress) {
+            if ($thiserrcount < $othererrcount) {
+                return true;
+            } else if ($thiserrcount > $othererrcount) {
+                return false;
+            }
         }
 
         // Choose the leftmost match
@@ -625,6 +640,30 @@ class qtype_preg_fa_exec_state implements qtype_preg_matcher_state {
                 return true;
             } else if ($other->left < $this->left) {
                 //echo "wins 2\n";
+                return false;
+            }
+        }
+
+        // Choose by typo priority.
+        if ($thiserrcount > 0 && $matchinginprogress) {
+            if ($this->errors->count(qtype_preg_typo::TRANSPOSITION) > $other->errors->count(qtype_preg_typo::TRANSPOSITION)) {
+                return true;
+            } else if ($this->errors->count(qtype_preg_typo::TRANSPOSITION) < $other->errors->count(qtype_preg_typo::TRANSPOSITION)) {
+                return false;
+            }
+            if ($this->errors->count(qtype_preg_typo::SUBSTITUTION) > $other->errors->count(qtype_preg_typo::SUBSTITUTION)) {
+                return true;
+            } else if ($this->errors->count(qtype_preg_typo::SUBSTITUTION) < $other->errors->count(qtype_preg_typo::SUBSTITUTION)) {
+                return false;
+            }
+            if ($this->errors->count(qtype_preg_typo::DELETION) > $other->errors->count(qtype_preg_typo::DELETION)) {
+                return true;
+            } else if ($this->errors->count(qtype_preg_typo::DELETION) < $other->errors->count(qtype_preg_typo::DELETION)) {
+                return false;
+            }
+            if ($this->errors->count(qtype_preg_typo::INSERTION) > $other->errors->count(qtype_preg_typo::INSERTION)) {
+                return true;
+            } else if ($this->errors->count(qtype_preg_typo::INSERTION) < $other->errors->count(qtype_preg_typo::INSERTION)) {
                 return false;
             }
         }
@@ -740,8 +779,7 @@ class qtype_preg_fa_exec_state implements qtype_preg_matcher_state {
                 }
             }
         }
-
-        return false;
+        return true;
     }
 
     /**
@@ -752,6 +790,15 @@ class qtype_preg_fa_exec_state implements qtype_preg_matcher_state {
         if ($this->is_full() && !$other->is_full()) {
             return true;
         } else if (!$this->is_full() && $other->is_full()) {
+            return false;
+        }
+
+        // Check for min errors.
+        $thiserrcount = $this->errors->count();
+        $othererrcount = $other->errors->count();
+        if ($thiserrcount < $othererrcount) {
+            return true;
+        } else if ($thiserrcount > $othererrcount) {
             return false;
         }
 
