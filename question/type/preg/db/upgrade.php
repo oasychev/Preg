@@ -314,5 +314,45 @@ function xmldb_qtype_preg_upgrade($oldversion=0) {
         upgrade_plugin_savepoint(true, 2016102000, 'qtype', 'preg');
     }
 
+
+    // Upgrade for approximate matching.
+    if ($oldversion < 2020012801) {
+        // Add some fields to qtype_preg_options table.
+        $table = new xmldb_table('qtype_preg_options');
+
+        // Fuzzy match field.
+        $field = new xmldb_field('approximatematch', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0', 'exactmatch');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Maxtypos count.
+        $field = new xmldb_field('maxtypos', XMLDB_TYPE_INTEGER, '11', null, XMLDB_NOTNULL, null, '0', 'approximatematch');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Errorspenalty.
+        $field = new xmldb_field('typospenalty', XMLDB_TYPE_FLOAT, '4, 2', null, XMLDB_NOTNULL, null, '0.07', 'maxtypos');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Usehowtofixpichint.
+        $field = new xmldb_field('usehowtofixpichint', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '1', 'typospenalty');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Howtofixpichintpenalty.
+        $field = new xmldb_field('howtofixpichintpenalty', XMLDB_TYPE_FLOAT, '4, 2', null, XMLDB_NOTNULL, null, '0.1', 'usehowtofixpichint');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Preg savepoint reached.
+        upgrade_plugin_savepoint(true, 2020012801, 'qtype', 'preg');
+    }
+
     return true;
 }

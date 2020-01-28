@@ -28,6 +28,8 @@ defined('MOODLE_INTERNAL') || die();
 global $CFG;
 require_once($CFG->dirroot . '/question/type/preg/preg_matcher.php');
 require_once($CFG->dirroot . '/blocks/formal_langs/block_formal_langs.php');
+require_once($CFG->dirroot . '/blocks/formal_langs/mistakesimage.php');
+
 
 /**
  * Hint class for showing matching part of a response (along with unmatched head and tail).
@@ -59,7 +61,7 @@ class qtype_preg_hintmatchingpart extends qtype_poasquestion\hint {
         if ($response !== null) {
             $bestfit = $this->question->get_best_fit_answer($response);
             $matchresults = $bestfit['match'];
-            return $this->could_show_hint($matchresults, false) && $bestfit['answer']->fraction >= $this->question->hintgradeborder;
+            return $this->could_show_hint($matchresults, false) /*&& $bestfit['answer']->fraction >= $this->question->hintgradeborder*/;
         }
         return false;
     }
@@ -83,7 +85,7 @@ class qtype_preg_hintmatchingpart extends qtype_poasquestion\hint {
         if ($this->could_show_hint($matchresults, false)) {// Hint could be computed.
             if (!$matchresults->full) {// There is a hint to show.
                 $wronghead = $renderer->render_unmatched($matchresults->match_heading());
-                $correctpart = $renderer->render_matched($matchresults->correct_before_hint());
+                $correctpart = $this->render_matched_with_errors($renderer, $matchresults);
                 $hint = $renderer->render_hinted($this->hinted_string($matchresults));
                 if ($this->to_be_continued($matchresults)) {
                     $hint .= $renderer->render_tobecontinued();
@@ -150,7 +152,7 @@ class qtype_preg_hintmatchingpart extends qtype_poasquestion\hint {
 
             if (!isset($matchresults->length[-2]) || $matchresults->length[-2] == qtype_preg_matching_results::NO_MATCH_FOUND) {
                 // No selection or no match with selection.
-                $correctpart = $renderer->render_matched($matchresults->matched_part());
+                $correctpart = $this->render_matched_with_errors($renderer, $matchresults);
             } else {
                 // We need to substract index_first of the match from all indexes when cuttring from matched part.
                 $correctstr = $matchresults->matched_part();
@@ -169,6 +171,53 @@ class qtype_preg_hintmatchingpart extends qtype_poasquestion\hint {
         }
 
          return $wronghead.$correctpart.$wrongtail;
+    }
+
+    /**
+     * Renders matched string part with typos.
+     */
+    public function render_matched_with_errors($renderer, $matchresults) {
+        if ($matchresults->typos->count() === 0) {
+            return $renderer->render_matched($matchresults->matched_part());
+        }
+
+        $matchresults = clone $matchresults;
+        $matchresults->typos = qtype_preg_typo_container::substitution_as_deletion_and_insertion($matchresults->typos);
+
+        $result = '';
+        $str = $matchresults->str()->string();
+        $index_first = $matchresults->index_first();
+        $length = $index_first + $matchresults->length();
+        $checkinsertion = true;
+        for ($i = $index_first; $i < $length; $i++) {
+            switch (true) {
+                case $checkinsertion && $matchresults->typos->contains(qtype_preg_typo::INSERTION, $i):
+                    $result .= $renderer->render_hinted(core_text::code2utf8(0x2026));
+                    $i--;
+                    $checkinsertion = false;
+                    break;
+                case $matchresults->typos->contains(qtype_preg_typo::TRANSPOSITION, $i):
+                    $result .= $renderer->render_hinted(core_text::substr($str, $i++, 2));
+                    $checkinsertion = true;
+                    break;
+                case $matchresults->typos->contains(qtype_preg_typo::SUBSTITUTION, $i):
+                    $result .= $renderer->render_hinted(core_text::substr($str, $i, 1));
+                    $checkinsertion = true;
+                    break;
+                case $matchresults->typos->contains(qtype_preg_typo::DELETION, $i):
+                    $result .= $renderer->render_unmatched(core_text::substr($str, $i, 1));
+                    $checkinsertion = true;
+                    break;
+                default:
+                    $result .= $renderer->render_matched(core_text::substr($str, $i, 1));
+                    $checkinsertion = true;
+            }
+        }
+        if ($matchresults->typos->contains(qtype_preg_typo::INSERTION, $length)) {
+            $result .= $renderer->render_hinted(core_text::code2utf8(0x2026));
+        }
+
+        return $result;
     }
 
     public function could_show_hint($matchresults, $testing) {
@@ -333,5 +382,87 @@ class qtype_preg_hintnextlexem extends qtype_preg_hintmatchingpart {
         return  is_object($this->hinttoken) && // There is something to add to the response (sometimes we need to delete, not add).
                 ( $this->hinttoken->position()->colend() + 1 < core_text::strlen($matchresults->extendedmatch->str()) || // Hinted token ends before generated string end.
                     $matchresults->extendedmatch->full === false ); // Generated string is not full.
+    }
+}
+
+class qtype_preg_hinthowtofixpic extends qtype_poasquestion\hint {
+
+    public function hint_type() {
+        return qtype_poasquestion\hint::SINGLE_INSTANCE_HINT;
+    }
+
+    public function hint_description() {
+        return get_string('hinthowtofixpic', 'qtype_preg');
+    }
+
+    // "Where" hint is obviously response based, since it used to better understand mistake message.
+    public function hint_response_based() {
+        return true;
+    }
+
+    /**
+     * The hint is disabled when penalty is set above 1.
+     */
+    public function hint_available($response = null) {
+        if ($response !== null && $this->question->usehowtofixpichint) {
+            $bestfit = $this->question->get_best_fit_answer($response);
+            $matchresults = $bestfit['match'];
+            return $matchresults->typos->count() > 0;
+        }
+        return $this->question->usehowtofixpichint;
+    }
+
+    public function penalty_for_specific_hint($response = null) {
+        if ($response !== null && $this->question->howtofixpichintpenalty) {
+            $bestfit = $this->question->get_best_fit_answer($response);
+            $matchresults = $bestfit['match'];
+            return $matchresults->typos->count() > 0 ? $this->question->howtofixpichintpenalty : 0;
+        }
+        return $this->question->howtofixpichintpenalty;
+    }
+
+    public function render_hint($renderer, question_attempt $qa, question_display_options $options, $response = null) {
+        // Get matching result.
+        $matchingresult = clone $this->question->get_best_fit_answer($response)['match'];
+        $str = $matchingresult->str();
+
+        // Replace substitutions with deletion and insertion.
+        $matchingresult->typos = qtype_preg_typo_container::substitution_as_deletion_and_insertion($matchingresult->typos);
+
+        // Add '...' character.
+        $startpos = $matchingresult->indexfirst[0];
+        $length = $matchingresult->length[0];
+        if (!$matchingresult->full) {
+            $str = \qtype_poasquestion\utf8_string::substr($str, 0, $startpos + $length) . core_text::code2utf8(0x2026);
+            $length++;
+        }
+
+        // Convert to lexem label format.
+        list($string, $operations) = $matchingresult->typos->apply_with_ops($str, $startpos, $length);
+
+        $label = new \block_formal_langs_lexeme_label('');
+        $label->set_text($string);
+        $label->set_operations($operations);
+        $label->recompute_size();
+
+        $size = $label->get_size();
+        $currentrect = (object)array(
+                'width' => $size[0],
+                'height' => $size[1],
+                'x' => FRAME_SPACE,
+                'y' => FRAME_SPACE
+        );
+
+        list($im, $palette) = \block_formal_langs_image_generator::create_default_image($size);
+        $label->paint($im, $palette, $currentrect, true);
+
+        // Output image.
+        ob_start();
+        imagepng($im);
+        $imagebinary = ob_get_clean();
+        imagedestroy($im);
+        $imagetext  = 'data:image/png;base64,' . base64_encode($imagebinary);
+        $imagesrc = html_writer::empty_tag('image', array('src' => $imagetext));
+        return $imagesrc;
     }
 }
