@@ -56,7 +56,7 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
     private $enabledspecificenginefields = [
         qtype_preg_matcher::PARTIAL_MATCHING => ['hintgradeborder', 'langid', 'lexemusername'],
         qtype_preg_matcher::CORRECT_ENDING => ['hintgradeborder', 'langid', 'lexemusername'],
-        qtype_preg_matcher::FUZZY_MATCHING => ['approximatematch', 'maxerrors', 'errorspenalty'],
+        qtype_preg_matcher::FUZZY_MATCHING => ['approximatematch', 'maxtypos', 'typospenalty'],
     ];
 
 
@@ -71,7 +71,6 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
      *      field holding an array of answers
      * @return array of form fields.
      */
-
     protected function get_per_answer_fields($mform, $label, $gradeoptions, &$repeatedoptions, &$answersoption) {
         $repeated = array();
         $repeated[] = $mform->createElement('hidden', 'regextests', '');
@@ -143,12 +142,12 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
         $PAGE->requires->js('/question/type/poasquestion/bootstrap/js/bootstrap-tooltip.js');
 
         $mform->addElement('select', 'engine', get_string('engine', 'qtype_preg'), $engines);
-        $mform->setDefault('engine', $CFG->qtype_preg_defaultengine);
+        $mform->setDefault('engine', get_config('qtype_preg', 'defaultengine'));
         $mform->addHelpButton('engine', 'engine', 'qtype_preg');
 
         $notations = $qtype->available_notations();
         $mform->addElement('select', 'notation', get_string('notation', 'qtype_preg'), $notations);
-        $mform->setDefault('notation', $CFG->qtype_preg_defaultnotation);
+        $mform->setDefault('notation', get_config('qtype_preg', 'defaultnotation'));
         $mform->addHelpButton('notation', 'notation', 'qtype_preg');
 
         // Fetch course context if it is possible.
@@ -171,7 +170,7 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
         }
         $currentlanguages = block_formal_langs::available_langs( $context, $pickedlanguage );
         $mform->addElement('select', 'langid', get_string('langselect', 'qtype_preg'), $currentlanguages);
-        $mform->setDefault('langid', $CFG->qtype_preg_defaultlang);
+        $mform->setDefault('langid', get_config('qtype_preg', 'defaultlang'));
         $mform->addHelpButton('langid', 'langselect', 'qtype_preg');
         $mform->addElement('text', 'lexemusername', get_string('lexemusername', 'qtype_preg'), array('size' => 54));
         $mform->setDefault('lexemusername', '');
@@ -243,16 +242,16 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
         $mform->addElement('selectyesno', 'approximatematch', get_string('approximatematch', 'qtype_preg'));
         $mform->addHelpButton('approximatematch', 'approximatematch', 'qtype_preg');
         $mform->setDefault('approximatematch', 1);
-        $mform->addElement('text', 'maxerrors', get_string('maxerrors', 'qtype_preg'), array('size' => 3));
-        $mform->setDefault('maxerrors', '2');
-        $mform->setType('maxerrors', PARAM_INT);
-        $mform->addHelpButton('maxerrors', 'maxerrors', 'qtype_preg');
-        $mform->addElement('text', 'errorspenalty', get_string('errorspenalty', 'qtype_preg'), array('size' => 3));
-        $mform->setDefault('errorspenalty', '0.07');
-        $mform->setType('errorspenalty', PARAM_FLOAT);
-        $mform->addHelpButton('errorspenalty', 'errorspenalty', 'qtype_preg');
-        $mform->disabledIf('maxerrors', 'approximatematch', 'eq', 0);
-        $mform->disabledIf('errorspenalty', 'approximatematch', 'eq', 0);
+        $mform->addElement('text', 'maxtypos', get_string('maxtypos', 'qtype_preg'), array('size' => 3));
+        $mform->setDefault('maxtypos', '2');
+        $mform->setType('maxtypos', PARAM_INT);
+        $mform->addHelpButton('maxtypos', 'maxtypos', 'qtype_preg');
+        $mform->addElement('text', 'typospenalty', get_string('typospenalty', 'qtype_preg'), array('size' => 3));
+        $mform->setDefault('typospenalty', '0.07');
+        $mform->setType('typospenalty', PARAM_FLOAT);
+        $mform->addHelpButton('typospenalty', 'typospenalty', 'qtype_preg');
+        $mform->disabledIf('maxtypos', 'approximatematch', 'eq', 0);
+        $mform->disabledIf('typospenalty', 'approximatematch', 'eq', 0);
 
         // Hinting section.
         $mform->addElement('header', 'hintinghdr', get_string('hinting', 'qtype_preg'));
@@ -306,8 +305,8 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
         if (!array_key_exists('approximatematch', $data)) {
             $data['approximatematch'] = false;
         }
-        if (!array_key_exists('maxerrors', $data)) {
-            $data['maxerrors'] = 0;
+        if (!array_key_exists('maxtypos', $data)) {
+            $data['maxtypos'] = 0;
         }
 
         $i = 0;
@@ -379,7 +378,7 @@ class qtype_preg_edit_form extends qtype_shortanswer_edit_form {
         }
 
         // how to fix hint should be available only if approximate math is enabled
-        if ($data['usehowtofixpichint'] && (!$data['approximatematch'] || $data['maxerrors'] == 0)) {
+        if ($data['usehowtofixpichint'] && (!$data['approximatematch'] || $data['maxtypos'] == 0)) {
             $errors['usehowtofixpichint'] = get_string('noapproximateforhowtofixpichint', 'qtype_preg');
         }
 

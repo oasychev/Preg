@@ -66,8 +66,8 @@ class qtype_preg_matching_results {
      */
     public $extensionstart;
 
-    /** @var object of qtype_preg_typo_container, containing all errors encountered by approximate matching */
-    public $errors;
+    /** @var object of qtype_preg_typo_container, containing all typos encountered by approximate matching */
+    public $typos;
     //      Source data.
     /** @var qtype_poasquestion\utf8_string A string being matched. */
     protected $str;
@@ -76,14 +76,14 @@ class qtype_preg_matching_results {
     /** @var array A map where keys are subexpression names and values are their numbers. */
     protected $subexprmap;
 
-    public function __construct($full = false, $indexfirst = array(), $length = array(), $left = self::UNKNOWN_CHARACTERS_LEFT, $extendedmatch = null, $errors = null) {
+    public function __construct($full = false, $indexfirst = array(), $length = array(), $left = self::UNKNOWN_CHARACTERS_LEFT, $extendedmatch = null, $typos = null) {
         $this->full = $full;
         $this->indexfirst = $indexfirst;
         $this->length = $length;
         $this->left = $left;
         $this->extendedmatch = $extendedmatch;
         $this->extensionstart = self::NO_MATCH_FOUND;
-        $this->errors = $errors;
+        $this->typos = $typos;
     }
 
     /**
@@ -154,7 +154,7 @@ class qtype_preg_matching_results {
      * For now the first (leftmost) full match is enought.
      */
     public function best() {
-        return $this->full && $this->errors->count() === 0;
+        return $this->full && $this->typos->count() === 0;
     }
 
     /**
@@ -186,19 +186,19 @@ class qtype_preg_matching_results {
             return false;
         }
 
-        // More errors count.
-        $thiserrcount = $this->errors->count();
-        $othererrcount = $other->errors->count();
+        // More typos count.
+        $thistypocount = $this->typos->count();
+        $othertypocount = $other->typos->count();
         if ($this->full) {
-            if ($thiserrcount > $othererrcount) {
+            if ($thistypocount > $othertypocount) {
                 return true;
-            } else if ($thiserrcount < $othererrcount) {
+            } else if ($thistypocount < $othertypocount) {
                 return false;
             }
         }
 
-        // Rightmost if contains errors.
-        if ($this->full && $thiserrcount > 0) {
+        // Rightmost if contains typos.
+        if ($this->full && $thistypocount > 0) {
             if ($this->indexfirst > $other->indexfirst) {
                 return true;
             } else if ($this->indexfirst < $other->indexfirst) {
@@ -215,9 +215,9 @@ class qtype_preg_matching_results {
             }
 
             if (!$this->full) {
-                if ($thiserrcount > $othererrcount) {
+                if ($thistypocount > $othertypocount) {
                     return true;
-                } else if ($thiserrcount < $othererrcount) {
+                } else if ($thistypocount < $othertypocount) {
                     return false;
                 }
             }
@@ -259,7 +259,7 @@ class qtype_preg_matching_results {
         // $this->left = self::UNKNOWN_CHARACTERS_LEFT;
         $this->indexfirst = array();
         $this->length = array();
-        $this->errors = new qtype_preg_typo_container();
+        $this->typos = new qtype_preg_typo_container();
         for ($i = 0; $i <= $this->maxsubexpr; $i++) {
             $this->indexfirst[$i] = self::NO_MATCH_FOUND;
             $this->length[$i] = self::NO_MATCH_FOUND;
@@ -422,6 +422,8 @@ class qtype_preg_matching_options extends qtype_preg_handling_options {
     public $extensionneeded = true;
     /** @var boolean Should matcher use approximate matching */
     public $approximatematch = false;
+    /** @var integer Typo limit for approximate matching */
+    public $typolimit = 0;
     /** @var string Unicode property name for preferred alphabet for \w etc when generating extension.*/
     public $preferredalphabet = null;
     /** @var string Unicode property name for preferred characters for dot meta-character when generating extension.*/
@@ -438,13 +440,13 @@ class qtype_preg_matching_options extends qtype_preg_handling_options {
 
     public function __construct()
     {
-        global $CFG;
         $this->mergeassertions = false;
         $this->extensionneeded = true;
         $this->approximatematch = false;
+        $this->typolimit = 0;
         $this->preferredalphabet = null;
         $this->preferfordot = null;
-        $this->langid = $CFG->qtype_preg_defaultlang;
+        $this->langid = get_config('qtype_preg', 'defaultlang');
         $this->capturesubexpressions = true;
         $this->equivalencecheck = false;
     }
@@ -482,7 +484,7 @@ class qtype_preg_matcher extends qtype_preg_regex_handler {
     const SUBEXPRESSION_CAPTURING = 3;
     // Always return full match as the correct ending (if at all possible).
     const CORRECT_ENDING_ALWAYS_FULL = 4;
-    // Fuzzy matching (same as full with insensitivity to some errors).
+    // Fuzzy matching (same as full with insensitivity to some typos).
     const FUZZY_MATCHING = 5;
 
     /**
@@ -504,16 +506,6 @@ class qtype_preg_matcher extends qtype_preg_regex_handler {
     public function name() {
         return 'preg_matcher';
     }
-
-    public function set_errors_limit($count) {
-        throw new qtype_preg_exception('Error: approximate matching has not been implemented for '.$this->name().' class');
-    }
-
-
-    public function get_errors_limit() {
-        return 0;
-    }
-
 
     /**
      * Parse regex and do all necessary preprocessing.
@@ -669,7 +661,7 @@ class qtype_preg_matcher extends qtype_preg_regex_handler {
         $result->set_source_info($str, $this->get_max_subexpr(), $this->get_subexpr_name_to_number_map());
         $result->invalidate_match();
 
-        if ($this->anchor->start && (!$this->is_supporting(qtype_preg_matcher::FUZZY_MATCHING) || $this->get_errors_limit() === 0)) {
+        if ($this->anchor->start && (!$this->is_supporting(qtype_preg_matcher::FUZZY_MATCHING) || $this->options->typolimit === 0)) {
             // The regex is anchored from start, so we really should check only start of the string and every line break if necessary.
             // Results for other offsets would be same.
             $rightborders = array(0);
