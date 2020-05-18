@@ -1,9 +1,0 @@
-[
- (scoped_type) {
-  (namespace_resolve) {
-   a
-   ::
-  }
-  b
- }
-]

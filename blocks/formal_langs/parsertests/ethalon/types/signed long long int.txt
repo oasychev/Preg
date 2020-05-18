@@ -1,8 +1,0 @@
-[
- (builtintype) {
-  signed
-  long
-  long
-  int
- }
-]

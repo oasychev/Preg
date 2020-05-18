@@ -1,5 +1,0 @@
-[
- (builtintype) {
-  char
- }
-]

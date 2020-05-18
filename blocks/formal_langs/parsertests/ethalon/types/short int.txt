@@ -1,6 +1,0 @@
-[
- (builtintype) {
-  short
-  int
- }
-]
