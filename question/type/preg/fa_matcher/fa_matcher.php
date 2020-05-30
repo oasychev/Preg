@@ -923,9 +923,9 @@ class qtype_preg_fa_matcher extends qtype_preg_matcher {
         $reached = array();
 
         // Get an epsilon-closure of the initial state.
-        foreach ($states['0'] as $state) {
+        foreach ($states['0'] as $number => $state) {
             if ($state !== null) {
-                $reached[] = $state;
+                $reached[$number] = $state;
             }
         }
 
