@@ -1091,9 +1091,6 @@ class qtype_preg_fa_node_cond_subexpr extends qtype_preg_fa_operator {
             $this->pregnode->subtype != qtype_preg_node_cond_subexpr::SUBTYPE_DEFINE) {
             return get_string($this->pregnode->subtype, 'qtype_preg');
         }
-        if ($options->approximatematch) {
-            return get_string('backreforrecursionforapproximate', 'qtype_preg');
-        }
         return true;
     }
 
