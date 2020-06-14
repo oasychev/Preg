@@ -348,7 +348,9 @@ class qtype_preg_fa_exec_state implements qtype_preg_matcher_state {
         $this->str = clone $this->str;  // Needs to be cloned for correct string generation.
         $this->typos = clone $this->typos;
         foreach ($this->stack as $key => $item) {
-            $this->stack[$key] = clone $item;
+            $cloneditem = clone $item;
+            $cloneditem->stateobj = $this;
+            $this->stack[$key] = $cloneditem;
         }
     }
 
