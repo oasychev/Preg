@@ -444,7 +444,7 @@ abstract class qtype_preg_fa_operator extends qtype_preg_fa_node {
 
     protected static function add_ending_eps_transition_if_needed(&$automaton, &$stack_item, $transform) {
         $outgoing = $automaton->get_adjacent_transitions($stack_item['end'], true);
-        if (!empty($outgoing)) {
+        if (!empty($outgoing) && (!$outgoing[0]->loopsback || $outgoing[0]->pregleaf->type !== qtype_preg_node::TYPE_LEAF_SUBEXPR_CALL)) {
             $end = $automaton->add_state();
             $epsleaf = new qtype_preg_leaf_meta(qtype_preg_leaf_meta::SUBTYPE_EMPTY);
             $automaton->add_transition(new \qtype_preg\fa\transition($stack_item['end'], $epsleaf, $end));
