@@ -795,12 +795,11 @@ class qtype_preg_fa_exec_state implements qtype_preg_matcher_state {
             }
         }
 
-        if (!$matchinginprogress && $equalgenerations) {
-            if ($thistypocount < $othertypocount) {
-                return true;
-            } else if ($thistypocount > $othertypocount) {
-                return false;
-            }
+
+        if ($thistypocount < $othertypocount) {
+            return true;
+        } else if ($thistypocount > $othertypocount) {
+            return false;
         }
 
         // Choose by typo priority.
