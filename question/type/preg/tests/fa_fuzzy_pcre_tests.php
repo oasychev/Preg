@@ -34,6 +34,7 @@ class qtype_preg_fa_fuzzy_pcre_tests extends TestCase
         $option = new qtype_preg_matching_options();
         $option->approximatematch = true;
         $option->langid = null;
+        $option->mergeassertions = true;
 
         $this->optionwith2typos = clone $option;
         $this->optionwith2typos->typolimit = 2;
@@ -44,6 +45,42 @@ class qtype_preg_fa_fuzzy_pcre_tests extends TestCase
         $this->optionwith4typos = clone $option;
         $this->optionwith4typos->typolimit = 4;
     }
+
+    public function test_simple_asserts1() {
+        $regex = 'a((\b\t|bde)g)+f';
+
+        $matcher = new qtype_preg_fa_matcher($regex, $this->optionwith2typos);
+        $str = 'a	gP	gf';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(1, $result->typos->count());
+        $this->assertEquals('a	g	gf', $result->typos->apply());
+
+        $str = 'ag  f';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(2, $result->typos->count());
+        $this->assertEquals('a	gf f', $result->typos->apply());
+    }
+
+    public function test_simple_asserts2() {
+        $regex = '\b([a!]b)+c';
+
+        $matcher = new qtype_preg_fa_matcher($regex, $this->optionwith2typos);
+        $str = '  aabJc';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(2, $result->typos->count());
+        $this->assertEquals('  abcbJc', $result->typos->apply());
+
+        $matcher = new qtype_preg_fa_matcher($regex, $this->optionwith2typos);
+        $str = '  ababuc';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(2, $result->typos->count());
+        $this->assertEquals(' ababc', $result->typos->apply());
+    }
+
 
     public function test_backref1() {
         $regex = '(a(b|c)d)\1';
@@ -185,7 +222,7 @@ class qtype_preg_fa_fuzzy_pcre_tests extends TestCase
         $result = $matcher->match($str);
         $this->assertTrue($result->full);
         $this->assertEquals(1, $result->typos->count());
-        $this->assertEquals('((2+2)*-3)-7)', $result->typos->apply());
+        $this->assertEquals('(((2+2)*-3)-7)', $result->typos->apply());
     }
 
     public function test_recursion2() {
@@ -203,14 +240,14 @@ class qtype_preg_fa_fuzzy_pcre_tests extends TestCase
         $result = $matcher->match($str);
         $this->assertTrue($result->full);
         $this->assertEquals(1, $result->typos->count());
-        $this->assertEquals('(())', $result->typos->apply());
+        $this->assertEquals('((a))', $result->typos->apply());
 
         // typos2
         $str = '(df(s(dd)sdf';
         $result = $matcher->match($str);
         $this->assertTrue($result->full);
         $this->assertEquals(1, $result->typos->count());
-        $this->assertEquals('dfs(dd)sdf', $result->typos->apply());
+        $this->assertEquals('(df(s)dd)sdf', $result->typos->apply());
     }
 
     public function test_positive_complex_asserts() {
@@ -243,7 +280,66 @@ class qtype_preg_fa_fuzzy_pcre_tests extends TestCase
         $str = 'acb';
         $result = $matcher->match($str);
         $this->assertTrue($result->full);
+        $this->assertEquals(1, $result->typos->count());
+        $this->assertEquals('bcb', $result->typos->apply());
+    }
+
+    public function test_conditional_asserts1() {
+        $regex = '(a)?b(?(1)c|d)';
+        $matcher = new qtype_preg_fa_matcher($regex, $this->optionwith2typos);
+
+        $str = 'a';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
         $this->assertEquals(2, $result->typos->count());
-        $this->assertEquals('bc', $result->typos->apply());
+        $this->assertEquals('bd', $result->typos->apply());
+
+        $str = '';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(2, $result->typos->count());
+        $this->assertEquals('bd', $result->typos->apply());
+
+        $str = 'bac';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(1, $result->typos->count());
+        $this->assertEquals('abc', $result->typos->apply());
+
+        $str = 'acb';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(1, $result->typos->count());
+        $this->assertEquals('abc', $result->typos->apply());
+
+        $str = 'bc';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(1, $result->typos->count());
+        $this->assertEquals('bd', $result->typos->apply());
+
+        $str = 'abX';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(1, $result->typos->count());
+        $this->assertEquals('abc', $result->typos->apply());
+    }
+
+    public function test_conditional_asserts2() {
+        $regex = '^((x)|(y)) (?(2)abcd|xz)';
+        $matcher = new qtype_preg_fa_matcher($regex, $this->optionwith2typos);
+
+        $str = 'x axzd';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(2, $result->typos->count());
+        $this->assertEquals('x abcd', $result->typos->apply());
+
+        // this is fails now
+        $str = 'x xz';
+        $result = $matcher->match($str);
+        $this->assertTrue($result->full);
+        $this->assertEquals(1, $result->typos->count());
+        $this->assertEquals('y xz', $result->typos->apply());
     }
 }
