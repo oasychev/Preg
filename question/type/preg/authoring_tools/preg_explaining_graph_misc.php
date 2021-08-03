@@ -276,14 +276,14 @@ class qtype_preg_explaining_graph_tool_subgraph {
                     $tmpneighborlink = $gmain->find_link($tmpdnode, $neighbor);
                     if ($has_next && $tmpneighborlink->lhead !== null)
                         $this->copy_lattrs_for_right($tmpneighborlink, $tmpneighbor);
-                    unset($tmpneighborlink->owner->links[array_search($tmpneighborlink, $tmpneighborlink->owner->links)]);
+                    unset($tmpneighborlink->owner->links[array_search($tmpneighborlink, $tmpneighborlink->owner->links, true)]);
                     $tmpneighborlink->owner->links = array_values($tmpneighborlink->owner->links);
 
                     // Destroy old node.
-                    unset($this->nodes[array_search($neighbor, $this->nodes)]);
+                    unset($this->nodes[array_search($neighbor, $this->nodes, true)]);
                     $this->nodes = array_values($this->nodes);
 
-                    $this->nodes[array_search($tmpdnode, $this->nodes)] = $tmp;
+                    $this->nodes[array_search($tmpdnode, $this->nodes, true)] = $tmp;
 
                     $i = -1; // Start this loop again.
                 }
@@ -422,18 +422,18 @@ class qtype_preg_explaining_graph_tool_subgraph {
                 // Destroy links between nighbors and assert.
                 $tmplink = $gmain->find_link($leftneighbor, $tmpdnode);
                 $this->copy_lattrs_for_left($tmplink, $this->links[count($this->links)-1]);
-                unset($tmplink->owner->links[array_search($tmplink, $tmplink->owner->links)]);
+                unset($tmplink->owner->links[array_search($tmplink, $tmplink->owner->links, true)]);
                 $tmplink->owner->links = array_values($tmplink->owner->links);
                 // If right neighbor isn't existing then there is no to destroy.
                 if ($rightneighbor !== null) {
                     $tmplink = $gmain->find_link($tmpdnode, $rightneighbor);
                     $this->copy_lattrs_for_right($tmplink, $this->links[count($this->links)-1]);
-                    unset($tmplink->owner->links[array_search($tmplink, $tmplink->owner->links)]);
+                    unset($tmplink->owner->links[array_search($tmplink, $tmplink->owner->links, true)]);
                     $tmplink->owner->links = array_values($tmplink->owner->links);
                 }
 
                 // Destroy assert.
-                unset($this->nodes[array_search($tmpdnode, $this->nodes)]);
+                unset($this->nodes[array_search($tmpdnode, $this->nodes, true)]);
                 $this->nodes = array_values($this->nodes);
 
                 reset($this->nodes); // Start loop again.
